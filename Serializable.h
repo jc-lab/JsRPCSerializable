@@ -7,10 +7,6 @@
 #include <vector>
 #include <exception>
 
-#ifndef HAS_JSCPPUTILS
-#define HAS_JSCPPUTILS 1
-#endif
-
 #if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
 #include <JsCPPUtils/SmartPointer.h>
 #endif
@@ -135,6 +131,8 @@ namespace JsRPC {
 		void serializableMapMemberArray(const char *name, std::vector<uint32_t> &object);
 		void serializableMapMemberArray(const char *name, std::vector<int64_t> &object);
 		void serializableMapMemberArray(const char *name, std::vector<uint64_t> &object);
+		void serializableMapMemberArray(const char *name, std::vector<float> &object);
+		void serializableMapMemberArray(const char *name, std::vector<double> &object);
 
 		void serializableMapMemberArray(const char *name, bool *object, int32_t arrlength);
 		void serializableMapMemberArray(const char *name, char *object, int32_t arrlength);

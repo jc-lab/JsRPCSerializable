@@ -71,8 +71,11 @@ namespace JsRPC {
 		T value;
 		if (remainsize < ds)
 			throw Serializable::ParseException();
-		memcpy(&value, &payload[*pos], ds);
-		*pos += ds;
+		if (ds > 0)
+		{
+			memcpy(&value, &payload[*pos], ds);
+			*pos += ds;
+		}
 		return value;
 	}
 
@@ -82,8 +85,11 @@ namespace JsRPC {
 		size_t remainsize = payload.size() - *pos;
 		if (remainsize < ds)
 			throw Serializable::ParseException();
-		memcpy(ptr, &payload[*pos], ds);
-		*pos += ds;
+		if (ds > 0)
+		{
+			memcpy(ptr, &payload[*pos], ds);
+			*pos += ds;
+		}
 	}
 
 	template<typename T>
@@ -96,9 +102,12 @@ namespace JsRPC {
 		payload.push_back((unsigned char)(length >> 8));
 		payload.push_back((unsigned char)(length >> 16));
 		payload.push_back((unsigned char)(length >> 24));
-		pos = payload.size();
-		payload.resize(pos + datasize, 0);
-		memcpy(&payload[pos], &text[0], datasize);
+		if (text.length() > 0)
+		{
+			pos = payload.size();
+			payload.resize(pos + datasize, 0);
+			memcpy(&payload[pos], &text[0], datasize);
+		}
 	}
 
 	template<typename T>
@@ -106,10 +115,13 @@ namespace JsRPC {
 	{
 		uint32_t length = readFromPayload<uint32_t>(payload, pos);
 		uint32_t datasize = sizeof(T) * length;
-		const T *textPtr = (const T *)&payload[*pos];
-		text.clear();
-		text = std::basic_string<T>(&textPtr[0], length);
-		*pos += datasize;
+		if(length > 0)
+		{
+			const T *textPtr = (const T *)&payload[*pos];
+			text.clear();
+			text = std::basic_string<T>(&textPtr[0], length);
+			*pos += datasize;
+		}
 	}
 
 	static void _serializeSubPayload(std::vector<unsigned char> &payload, Serializable *ptr)
@@ -141,6 +153,7 @@ namespace JsRPC {
 		}
 	}
 
+#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
 	template<typename T>
 	static void _serializeStdListSmartPointerStdBasicString(std::vector<unsigned char> &payload, const void *ptr)
 	{
@@ -193,6 +206,7 @@ namespace JsRPC {
 			plist->push_back(object);
 		}
 	}
+#endif
 	
 	template<typename T>
 	static void _serializeStdListStdBasicString(std::vector<unsigned char> &payload, const void *ptr)
@@ -249,10 +263,15 @@ namespace JsRPC {
 		{
 			JsRPC::Serializable *serializable = memberInfo.createFactory->create();
 			uint32_t subpayloadSize = readFromPayload<uint32_t>(payload, pos);
-			std::vector<unsigned char> subpayload(subpayloadSize, 0);
-			readFromPayload(payload, pos, &subpayload[0], subpayloadSize);
-			serializable->deserialize(subpayload);
-			plist->push_back(serializable);
+			if (subpayloadSize > 0)
+			{
+				std::vector<unsigned char> subpayload(subpayloadSize, 0);
+				readFromPayload(payload, pos, &subpayload[0], subpayloadSize);
+				serializable->deserialize(subpayload);
+				plist->push_back(serializable);
+			} else {
+				plist->push_back(NULL);
+			}
 		}
 	}
 
@@ -260,6 +279,7 @@ namespace JsRPC {
 	{
 		int32_t i;
 		int32_t listSize;
+#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
 		if (memberInfo.mtype & SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER)
 		{
 			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
@@ -285,6 +305,7 @@ namespace JsRPC {
 			}
 		}
 		else
+#endif
 		{
 			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
 			{
@@ -315,6 +336,7 @@ namespace JsRPC {
 	{
 		int32_t i;
 		int32_t listSize;
+#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
 		if (memberInfo.mtype & SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER)
 		{
 			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
@@ -340,6 +362,7 @@ namespace JsRPC {
 			}
 		}
 		else
+#endif
 		{
 			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
 			{
@@ -408,8 +431,11 @@ namespace JsRPC {
 		uint32_t vectorSize = readFromPayload<uint32_t>(payload, pos);
 		uint32_t i;
 		pvector->clear();
-		pvector->assign(vectorSize, 0);
-		readFromPayload(payload, pos, (void*)&(*pvector)[0], vectorSize);
+		if (vectorSize > 0)
+		{
+			pvector->assign(vectorSize, 0);
+			readFromPayload(payload, pos, (void*)&(*pvector)[0], vectorSize);
+		}
 	}
 
 	static void _serializeStdVector(std::vector<unsigned char> &payload, const SerializableMemberInfo &memberInfo)
@@ -804,8 +830,8 @@ namespace JsRPC {
 	void Serializable::serializableMapMember(const char *name, uint32_t &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_UINT32, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
 	void Serializable::serializableMapMember(const char *name, int64_t &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_SINT64, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
 	void Serializable::serializableMapMember(const char *name, uint64_t &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_UINT64, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, float &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_SINT64, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, double &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_UINT8, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
+	void Serializable::serializableMapMember(const char *name, float &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_FLOAT, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
+	void Serializable::serializableMapMember(const char *name, double &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_DOUBLE, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
 	void Serializable::serializableMapMember(const char *name, Serializable *object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_SUBPAYLOAD), SerializableMemberInfo::MTYPE_NATIVE, (void*)object, 1)); }
 #if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
 	SerializableMemberInfo & Serializable::serializableMapMember(const char *name, JsCPPUtils::SmartPointer<Serializable> *object) { m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_SUBPAYLOAD, (SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER), (void*)&object, 0)); return *m_members.rbegin(); }
@@ -823,6 +849,8 @@ namespace JsRPC {
 	void Serializable::serializableMapMemberArray(const char *name, std::vector<uint32_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_UINT32), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
 	void Serializable::serializableMapMemberArray(const char *name, std::vector<int64_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_SINT64), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
 	void Serializable::serializableMapMemberArray(const char *name, std::vector<uint64_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_UINT64), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
+	void Serializable::serializableMapMemberArray(const char *name, std::vector<float> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_FLOAT), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
+	void Serializable::serializableMapMemberArray(const char *name, std::vector<double> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_DOUBLE), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
 
 	void Serializable::serializableMapMemberArray(const char *name, bool *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_BOOL ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
 	void Serializable::serializableMapMemberArray(const char *name, char *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_CHAR ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
