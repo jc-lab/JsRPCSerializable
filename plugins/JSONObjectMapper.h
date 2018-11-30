@@ -22,8 +22,14 @@ namespace JsRPC {
 	class JSONObjectMapper
 	{
 	public:
+		class TypeNotMatchException : public std::exception
+		{ };
+		class DataOverrflowException : public std::exception
+		{ };
+
 #if defined(HAS_RAPIDJSON) && HAS_RAPIDJSON
 		static void serializeTo(Serializable *serialiable, rapidjson::Document &jsonDoc);
+		static void deserializeJsonObject(Serializable *serialiable, const rapidjson::Value &jsonObject);
 
 		template<class AllocatorT>
 		static void serializeTo(Serializable *serialiable, rapidjson::Value &targetObject, AllocatorT &jsonAllocator)
@@ -41,6 +47,13 @@ namespace JsRPC {
 			serializeTo(serialiable, jsonDoc);
 			jsonDoc.Accept(jsonWriter);
 			return std::string(jsonBuf.GetString(), jsonBuf.GetLength());
+		}
+
+		static void deserialize(Serializable *serialiable, const std::string &json)
+		{
+			rapidjson::Document jsonDoc;
+			jsonDoc.Parse(json.c_str(), json.length());
+			deserializeJsonObject(serialiable, jsonDoc);
 		}
 #endif
 	};
