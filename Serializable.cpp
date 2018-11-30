@@ -389,6 +389,63 @@ namespace JsRPC {
 		throw Serializable::UnavailableTypeException();
 	}
 
+	static void _clearStdList(const SerializableMemberInfo &memberInfo)
+	{
+		int32_t i;
+		int32_t listSize;
+#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
+		if (memberInfo.mtype & SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER)
+		{
+			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
+			{
+				switch (memberInfo.ptype & 0xFFF)
+				{
+				case SerializableMemberInfo::PTYPE_CHAR:
+					((std::list< JsCPPUtils::SmartPointer< std::basic_string<char> > > *)memberInfo.ptr)->clear();
+					return;
+				case SerializableMemberInfo::PTYPE_WCHAR:
+					((std::list< JsCPPUtils::SmartPointer< std::basic_string<wchar_t> > > *)memberInfo.ptr)->clear();
+					return;
+				}
+			}
+			else
+			{
+				switch (memberInfo.ptype & 0xFFF)
+				{
+				case SerializableMemberInfo::PTYPE_SUBPAYLOAD:
+					((std::list< JsCPPUtils::SmartPointer< Serializable > > *)memberInfo.ptr)->clear();
+					return;
+				}
+			}
+		}
+		else
+#endif
+		{
+			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
+			{
+				switch (memberInfo.ptype & 0xFFF)
+				{
+				case SerializableMemberInfo::PTYPE_CHAR:
+					((std::list< std::basic_string<char> > *)memberInfo.ptr)->clear();
+					return;
+				case SerializableMemberInfo::PTYPE_WCHAR:
+					((std::list< std::basic_string<wchar_t> > *)memberInfo.ptr)->clear();
+					return;
+				}
+			}
+			else
+			{
+				switch (memberInfo.ptype & 0xFFF)
+				{
+				case SerializableMemberInfo::PTYPE_SUBPAYLOAD:
+					((std::list<JsRPC::Serializable*>*)memberInfo.ptr)->clear();
+					return;
+				}
+			}
+		}
+		throw Serializable::UnavailableTypeException();
+	}
+
 	static void _serializeStdVectorNativeBool(std::vector<unsigned char> &payload, void *ptr)
 	{
 		const std::vector<bool> *pvector = (const std::vector<bool>*)ptr;
@@ -436,6 +493,13 @@ namespace JsRPC {
 			pvector->assign(vectorSize, 0);
 			readFromPayload(payload, pos, (void*)&(*pvector)[0], vectorSize);
 		}
+	}
+
+	template<typename T>
+	static void _clearStdVectorNative(void *ptr)
+	{
+		std::vector<T> *pvector = (std::vector<T>*)ptr;
+		pvector->clear();
 	}
 
 	static void _serializeStdVector(std::vector<unsigned char> &payload, const SerializableMemberInfo &memberInfo)
@@ -532,6 +596,53 @@ namespace JsRPC {
 		throw Serializable::UnavailableTypeException();
 	}
 
+	static void _clearStdVector(const SerializableMemberInfo &memberInfo)
+	{
+		switch (memberInfo.ptype & 0xFFF)
+		{
+		case SerializableMemberInfo::PTYPE_BOOL:
+			_clearStdVectorNative<bool>(memberInfo.ptr);
+			return;
+		case SerializableMemberInfo::PTYPE_SINT8:
+			_clearStdVectorNative<int8_t>(memberInfo.ptr);
+			return;
+		case SerializableMemberInfo::PTYPE_UINT8:
+			_clearStdVectorNative<uint8_t>(memberInfo.ptr);
+			return;
+		case SerializableMemberInfo::PTYPE_SINT16:
+			_clearStdVectorNative<int16_t>(memberInfo.ptr);
+			return;
+		case SerializableMemberInfo::PTYPE_UINT16:
+			_clearStdVectorNative<uint16_t>(memberInfo.ptr);
+			return;
+		case SerializableMemberInfo::PTYPE_SINT32:
+			_clearStdVectorNative<int32_t>(memberInfo.ptr);
+			return;
+		case SerializableMemberInfo::PTYPE_UINT32:
+			_clearStdVectorNative<uint32_t>(memberInfo.ptr);
+			return;
+		case SerializableMemberInfo::PTYPE_SINT64:
+			_clearStdVectorNative<int64_t>(memberInfo.ptr);
+			return;
+		case SerializableMemberInfo::PTYPE_UINT64:
+			_clearStdVectorNative<uint64_t>(memberInfo.ptr);
+			return;
+		case SerializableMemberInfo::PTYPE_FLOAT:
+			_clearStdVectorNative<float>(memberInfo.ptr);
+			return;
+		case SerializableMemberInfo::PTYPE_DOUBLE:
+			_clearStdVectorNative<double>(memberInfo.ptr);
+			return;
+		case SerializableMemberInfo::PTYPE_CHAR:
+			_clearStdVectorNative<char>(memberInfo.ptr);
+			return;
+		case SerializableMemberInfo::PTYPE_WCHAR:
+			_clearStdVectorNative<wchar_t>(memberInfo.ptr);
+			return;
+		}
+		throw Serializable::UnavailableTypeException();
+	}
+
 	static void _serializeNativeArrayBool(std::vector<unsigned char> &payload, const SerializableMemberInfo &memberInfo)
 	{
 		int32_t i;
@@ -609,6 +720,31 @@ namespace JsRPC {
 		throw Serializable::UnavailableTypeException();
 	}
 
+	static void _clearNativeArray(const SerializableMemberInfo &memberInfo)
+	{
+		switch (memberInfo.ptype & 0xFFF)
+		{
+		case SerializableMemberInfo::PTYPE_BOOL:
+			memset((void*)memberInfo.ptr, 0, sizeof(bool) * memberInfo.length);
+			return;
+		case SerializableMemberInfo::PTYPE_SINT8:
+		case SerializableMemberInfo::PTYPE_UINT8:
+		case SerializableMemberInfo::PTYPE_SINT16:
+		case SerializableMemberInfo::PTYPE_UINT16:
+		case SerializableMemberInfo::PTYPE_SINT32:
+		case SerializableMemberInfo::PTYPE_UINT32:
+		case SerializableMemberInfo::PTYPE_SINT64:
+		case SerializableMemberInfo::PTYPE_UINT64:
+		case SerializableMemberInfo::PTYPE_FLOAT:
+		case SerializableMemberInfo::PTYPE_DOUBLE:
+		case SerializableMemberInfo::PTYPE_CHAR:
+		case SerializableMemberInfo::PTYPE_WCHAR:
+			memset((void*)memberInfo.ptr, 0, (memberInfo.ptype & 0xF) * memberInfo.length);
+			return;
+		}
+		throw Serializable::UnavailableTypeException();
+	}
+
 	static void _serializeNativeObject(std::vector<unsigned char> &payload, const SerializableMemberInfo &memberInfo)
 	{
 		switch (memberInfo.ptype & 0xFFF)
@@ -654,6 +790,31 @@ namespace JsRPC {
 		case SerializableMemberInfo::PTYPE_CHAR:
 		case SerializableMemberInfo::PTYPE_WCHAR:
 			readFromPayload(payload, pos, memberInfo.ptr, (memberInfo.ptype & 0xF));
+			return;
+		}
+		throw Serializable::UnavailableTypeException();
+	}
+
+	static void _clearNativeObject(const SerializableMemberInfo &memberInfo)
+	{
+		switch (memberInfo.ptype & 0xFFF)
+		{
+		case SerializableMemberInfo::PTYPE_BOOL:
+			*((bool*)memberInfo.ptr) = 0;
+			return;
+		case SerializableMemberInfo::PTYPE_SINT8:
+		case SerializableMemberInfo::PTYPE_UINT8:
+		case SerializableMemberInfo::PTYPE_SINT16:
+		case SerializableMemberInfo::PTYPE_UINT16:
+		case SerializableMemberInfo::PTYPE_SINT32:
+		case SerializableMemberInfo::PTYPE_UINT32:
+		case SerializableMemberInfo::PTYPE_SINT64:
+		case SerializableMemberInfo::PTYPE_UINT64:
+		case SerializableMemberInfo::PTYPE_FLOAT:
+		case SerializableMemberInfo::PTYPE_DOUBLE:
+		case SerializableMemberInfo::PTYPE_CHAR:
+		case SerializableMemberInfo::PTYPE_WCHAR:
+			memset((void*)memberInfo.ptr, 0, (memberInfo.ptype & 0xF));
 			return;
 		}
 		throw Serializable::UnavailableTypeException();
@@ -817,6 +978,53 @@ namespace JsRPC {
 		}
 		if (remainsize != 0)
 			throw ParseException();
+	}
+
+	void Serializable::clearObject(Serializable *serializable)
+	{
+		const std::list<SerializableMemberInfo> &serializableMembers = serializable->serializableMembers();
+		for (std::list<SerializableMemberInfo>::const_iterator iter = serializableMembers.begin(); iter != serializableMembers.end(); iter++)
+		{
+			int i;
+			uint32_t size = 0;
+			int32_t listLength = 1;
+			if (iter->ptype & SerializableMemberInfo::PTYPE_LIST)
+			{
+				// List
+				if (iter->mtype & SerializableMemberInfo::MTYPE_STDLIST)
+				{
+					_clearStdList(*iter);
+				}
+			}
+			else if (iter->ptype & SerializableMemberInfo::PTYPE_ARRAY)
+			{
+				// Single object
+				if (iter->mtype & SerializableMemberInfo::MTYPE_STDVECTOR)
+				{
+					_clearStdVector(*iter);
+				}else if (iter->mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
+				{
+					switch (iter->ptype & 0xFFF)
+					{
+					case SerializableMemberInfo::PTYPE_CHAR:
+						((std::basic_string<char>*)iter->ptr)->clear();
+						break;
+					case SerializableMemberInfo::PTYPE_WCHAR:
+						((std::basic_string<wchar_t>*)iter->ptr)->clear();
+						break;
+					default:
+						throw UnavailableTypeException();
+					}
+				}else{
+					_clearNativeArray(*iter);
+				}
+			}
+			else
+			{
+				// Just object
+				_clearNativeObject(*iter);
+			}
+		}
 	}
 
 	void Serializable::serializableMapMember(const char *name, bool &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_BOOL, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }

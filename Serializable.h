@@ -100,6 +100,8 @@ namespace JsRPC {
 		void deserialize(const std::vector<unsigned char>& payload) throw (ParseException);
 		const std::list<SerializableMemberInfo> &serializableMembers() { return m_members; }
 
+		static void clearObject(Serializable *serializable);
+
 	protected:
 		void serializableMapMember(const char *name, bool &object);
 		void serializableMapMember(const char *name, char &object);
