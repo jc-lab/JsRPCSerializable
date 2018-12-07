@@ -940,7 +940,6 @@ namespace JsRPC {
 			else {
 				(*iterMem)->setNull();
 			}
-			iterMem++;
 		}
 	}
 }
