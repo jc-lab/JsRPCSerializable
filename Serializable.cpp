@@ -281,10 +281,11 @@ namespace JsRPC {
 		}
 	}
 
-	void Serializable::serializableMapMember(const char *name, internal::STypeCommon &object)
+	internal::STypeCommon &Serializable::serializableMapMember(const char *name, internal::STypeCommon &object)
 	{
 		object._memberInfo.name = name;
 		m_members.push_back(&object);
+		return object;
 	}
 
 	void Serializable::serializableClearObjects()

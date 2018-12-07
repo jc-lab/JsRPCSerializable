@@ -634,6 +634,45 @@ namespace JsRPC {
 		} \
 	};
 
+	template<> 
+	class SType< std::list< JsCPPUtils::SmartPointer<Serializable> > > : public STypeBase< std::list< JsCPPUtils::SmartPointer<Serializable> > > {
+	public:
+		SType() :
+			STypeBase({ internal::SerializableMemberInfo::ETYPE_STDLIST, internal::SerializableMemberInfo::ETYPE_SMARTPOINTER, internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD }) {
+			this->_memberInfo.ptr = &_value;
+			this->_memberInfo.length = 1;
+		}
+		void clear() override { _value.clear(); }
+		SType< std::list<JsCPPUtils::SmartPointer<Serializable> > >& operator=(const std::list<JsCPPUtils::SmartPointer<Serializable> >& value) {
+			this->_memberInfo.isNull = false;
+			this->_value = value;
+			return *this;
+		}
+		std::list<JsCPPUtils::SmartPointer<Serializable> >& operator->() {
+			this->_memberInfo.isNull = false;
+			return this->_value;
+		}
+	};
+	template<>
+	class SRefType< std::list< JsCPPUtils::SmartPointer<Serializable> > > : public SRefTypeBase< std::list< JsCPPUtils::SmartPointer<Serializable> > > {
+	public:
+		SRefType(std::list< JsCPPUtils::SmartPointer<Serializable> > &refvalue) :
+			SRefTypeBase({ internal::SerializableMemberInfo::ETYPE_STDLIST, internal::SerializableMemberInfo::ETYPE_SMARTPOINTER, internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD }, refvalue) {
+			this->_memberInfo.ptr = &_value;
+			this->_memberInfo.length = 1;
+		}
+		void clear() override { _value.clear(); }
+		SRefType< std::list<JsCPPUtils::SmartPointer<Serializable> > >& operator=(const std::list<JsCPPUtils::SmartPointer<Serializable> >& value) {
+			this->_memberInfo.isNull = false;
+			this->_value = value;
+			return *this;
+		}
+		std::list<JsCPPUtils::SmartPointer<Serializable> >& operator->() {
+			this->_memberInfo.isNull = false;
+			return this->_value;
+		}
+	};
+
 #define __JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(CTYPE, ETYPE) \
 	template<int arraySize> \
 	class SArrayType<CTYPE, arraySize> : public SArrayTypeBase<CTYPE, arraySize> { \
@@ -733,7 +772,7 @@ namespace JsRPC {
 		void serializableClearObjects();
 
 	protected:
-		void serializableMapMember(const char *name, internal::STypeCommon &object);
+		internal::STypeCommon &serializableMapMember(const char *name, internal::STypeCommon &object);
 
 	private:
 		bool checkFlagsAll(int value, int type) const
