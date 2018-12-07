@@ -148,6 +148,37 @@ namespace JsRPC {
 			return this->_value;
 		}
 	};
+	template <typename T>
+	class SRefTypeBase : public internal::STypeCommon
+	{
+	protected:
+		T &_value;
+
+		SRefTypeBase(const std::list<internal::SerializableMemberInfo::EncapType>& _encaps, T &refvalue) :
+			STypeCommon(_encaps)
+			, _value(refvalue)
+		{
+		}
+
+	public:
+		virtual ~SRefTypeBase() { }
+
+		void set(const T value) {
+			this->_memberInfo.isNull = false;
+			this->_value = value;
+		}
+		const T get() const {
+			return this->_value;
+		}
+
+		T& operator*() {
+			this->_memberInfo.isNull = false;
+			return this->_value;
+		}
+		const T& operator*() const {
+			return this->_value;
+		}
+	};
 	template <typename T, int arraySize>
 	class SArrayTypeBase : public internal::STypeCommon
 	{
@@ -177,12 +208,48 @@ namespace JsRPC {
 			return this->_value;
 		}
 	};
+	template <typename T, int arraySize>
+	class SArrayTypeRefBase : public internal::STypeCommon
+	{
+	protected:
+		T (&_value)[arraySize];
+
+		SArrayTypeRefBase(int _ptype, const std::list<internal::SerializableMemberInfo::EncapType>& _encaps, T (&refvalue)[arraySize]) :
+			STypeCommon((internal::SerializableMemberInfo::ProtoType)_ptype, _encaps)
+			, _value(refvalue)
+		{
+		}
+
+	public:
+		virtual ~SArrayTypeRefBase() { }
+
+		T& operator*() {
+			this->_memberInfo.isNull = false;
+			return this->_value;
+		}
+		const T& operator*() const {
+			return this->_value;
+		}
+		void set(const T value) {
+			this->_memberInfo.isNull = false;
+			this->_value = value;
+		}
+		const T get() const {
+			return this->_value;
+		}
+	};
 
 	template<typename T>
 	class SType
 	{
 	private:
 		SType() {}
+	};
+	template<typename T>
+	class SRefType
+	{
+	private:
+		SRefType() {}
 	};
 
 	template<typename T, int arraySize>
@@ -210,6 +277,54 @@ namespace JsRPC {
 			this->_memberInfo.length = 1;
 		}
 		virtual ~SSerializableType() {}
+
+		void clear() override {
+			_value.serializableClearObjects();
+		}
+
+		T& operator*() {
+			this->_memberInfo.isNull = false;
+			return this->_value;
+		}
+		const T& operator*() const {
+			return this->_value;
+		}
+		void set(const T value) {
+			this->_memberInfo.isNull = false;
+			this->_value = value;
+		}
+		const T get() const {
+			return this->_value;
+		}
+		void setNull() {
+			this->_memberInfo.isNull = true;
+		}
+		void setNull(bool value) {
+			this->_memberInfo.isNull = value;
+		}
+		const bool isNull() {
+			return this->_memberInfo.isNull;
+		}
+	};
+	template <typename T>
+	class SSerializableRefType : public internal::STypeCommon
+	{
+	protected:
+		T &_value;
+		Serializable *_test;
+
+		//internal::SerializableMemberInfo::ProtoType _ptype, const std::list<internal::SerializableMemberInfo::EncapType>& _encaps
+
+	public:
+		SSerializableRefType(T &refvalue) :
+			STypeCommon({ internal::SerializableMemberInfo::ETYPE_SUBPAYLOAD })
+			, _value(refvalue)
+		{
+			this->_test = &this->_value;
+			this->_memberInfo.ptr = &_value;
+			this->_memberInfo.length = 1;
+		}
+		virtual ~SSerializableRefType() {}
 
 		void clear() override {
 			_value.serializableClearObjects();
@@ -281,6 +396,47 @@ namespace JsRPC {
 			return this->_memberInfo.isNull;
 		}
 	};
+	template <typename T>
+	class SSerializableRefType< JsCPPUtils::SmartPointer<T> > : public internal::STypeCommon
+	{
+	protected:
+		JsCPPUtils::SmartPointer<T> &_value;
+
+	public:
+		SSerializableRefType(JsCPPUtils::SmartPointer<T> &refvalue) :
+			STypeCommon({ internal::SerializableMemberInfo::ETYPE_SMARTPOINTER, internal::SerializableMemberInfo::ETYPE_SUBPAYLOAD })
+			, _value(refvalue)
+		{
+			this->_memberInfo.ptr = &_value;
+			this->_memberInfo.length = 1;
+		}
+		virtual ~SSerializableRefType() {}
+
+		void clear() override {
+			_value = NULL;
+		}
+
+		T& operator*() {
+			this->_memberInfo.isNull = false;
+			return this->_value;
+		}
+		const T& operator*() const {
+			return this->_value;
+		}
+		void set(const T value) {
+			this->_memberInfo.isNull = false;
+			this->_value = value;
+		}
+		const T get() const {
+			return this->_value;
+		}
+		void setNull() {
+			this->_memberInfo.isNull = true;
+		}
+		const bool isNull() {
+			return this->_memberInfo.isNull;
+		}
+	};
 #endif
 
 #define __JSRPC_SERIALIZABLE_GENSTYPE(CTYPE, ETYPE) \
@@ -298,7 +454,22 @@ namespace JsRPC {
 			this->_value = value; \
 			return *this; \
 		} \
-	}
+	}; \
+	template<> \
+	class SRefType<CTYPE> : public SRefTypeBase<CTYPE> { \
+	public: \
+		SRefType(CTYPE &refvalue) : \
+		SRefTypeBase({ (internal::SerializableMemberInfo::EncapType)((ETYPE) | internal::SerializableMemberInfo::EncapType::ETYPE_NATIVE) }, refvalue) { \
+			this->_memberInfo.ptr = &_value; \
+			this->_memberInfo.length = 1; \
+		} \
+		void clear() override { _value = (CTYPE)0; } \
+		SRefType<CTYPE>& operator=(const CTYPE& value) { \
+			this->_memberInfo.isNull = false; \
+			this->_value = value; \
+			return *this; \
+		} \
+	}; \
 
 	/*
 #define __JSRPC_SERIALIZABLE_GENSARRAYTYPE(CPPTYPE, ...) \
@@ -332,7 +503,26 @@ namespace JsRPC {
 			this->_memberInfo.isNull = false; \
 			return this->_value; \
 		} \
-	}
+	}; \
+	template<> \
+	class SRefType< std::basic_string<CTYPE> > : public SRefTypeBase< std::basic_string<CTYPE> > { \
+	public: \
+		SRefType(std::basic_string<CTYPE> &refvalue) : \
+		SRefTypeBase({ internal::SerializableMemberInfo::ETYPE_STDBASICSTRING, (internal::SerializableMemberInfo::EncapType)(ETYPE) }, refvalue) { \
+			this->_memberInfo.ptr = &_value; \
+			this->_memberInfo.length = 1; \
+		} \
+		void clear() override { _value.clear(); } \
+		SRefType< std::basic_string<CTYPE> >& operator=(const std::basic_string<CTYPE>& value) { \
+			this->_memberInfo.isNull = false; \
+			this->_value = value; \
+			return *this; \
+		} \
+		std::basic_string<CTYPE>& operator->() { \
+			this->_memberInfo.isNull = false; \
+			return this->_value; \
+		} \
+	};
 
 #define __JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(CTYPE, ETYPE) \
 	template<> \
@@ -348,7 +538,21 @@ namespace JsRPC {
 			this->_memberInfo.isNull = false; \
 			return this->_value; \
 		} \
-	}
+	}; \
+	template<> \
+	class SRefType< std::vector<CTYPE> > : public SRefTypeBase< std::vector<CTYPE> > { \
+	public: \
+		SRefType(std::vector<CTYPE> &refvalue) : \
+		SRefTypeBase({ internal::SerializableMemberInfo::ETYPE_STDVECTOR, (internal::SerializableMemberInfo::EncapType)(ETYPE) }, refvalue) { \
+			this->_memberInfo.ptr = &_value; \
+			this->_memberInfo.length = 1; \
+		} \
+		void clear() override { _value.clear(); } \
+		std::vector<CTYPE>& operator->() { \
+			this->_memberInfo.isNull = false; \
+			return this->_value; \
+		} \
+	};
 
 #define __JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(CTYPE, ETYPE) \
 	template<> \
@@ -369,7 +573,26 @@ namespace JsRPC {
 			this->_memberInfo.isNull = false; \
 			return this->_value; \
 		} \
-	}
+	}; \
+	template<> \
+	class SRefType< std::list<std::vector<CTYPE> > > : public SRefTypeBase< std::list<std::vector<CTYPE> > > { \
+	public: \
+		SRefType(std::list<std::vector<CTYPE> > &refvalue) : \
+		SRefTypeBase({ internal::SerializableMemberInfo::ETYPE_STDLIST, internal::SerializableMemberInfo::ETYPE_STDVECTOR, (internal::SerializableMemberInfo::EncapType)(ETYPE) }, refvalue) { \
+			this->_memberInfo.ptr = &_value; \
+			this->_memberInfo.length = 1; \
+		} \
+		void clear() override { _value.clear(); } \
+		SRefType< std::list<std::vector<CTYPE> > >& operator=(const std::list<std::vector<CTYPE> >& value) { \
+			this->_memberInfo.isNull = false; \
+			this->_value = value; \
+			return *this; \
+		} \
+		std::list<std::vector<CTYPE> >& operator->() { \
+			this->_memberInfo.isNull = false; \
+			return this->_value; \
+		} \
+	};
 
 #define __JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_STRING(CTYPE, ETYPE) \
 	template<> \
@@ -390,7 +613,26 @@ namespace JsRPC {
 			this->_memberInfo.isNull = false; \
 			return this->_value; \
 		} \
-	}
+	}; \
+	template<> \
+	class SRefType< std::list<std::basic_string<CTYPE> > > : public SRefTypeBase< std::list<std::basic_string<CTYPE> > > { \
+	public: \
+		SRefType(std::list<std::basic_string<CTYPE> > &refvalue) : \
+		SRefTypeBase({ internal::SerializableMemberInfo::ETYPE_STDLIST, internal::SerializableMemberInfo::ETYPE_STDBASICSTRING, (internal::SerializableMemberInfo::EncapType)(ETYPE) }, refvalue) { \
+			this->_memberInfo.ptr = &_value; \
+			this->_memberInfo.length = 1; \
+		} \
+		void clear() override { _value.clear(); } \
+		SRefType< std::list<std::basic_string<CTYPE> > >& operator=(const std::list<std::basic_string<CTYPE> >& value) { \
+			this->_memberInfo.isNull = false; \
+			this->_value = value; \
+			return *this; \
+		} \
+		std::list<std::basic_string<CTYPE> >& operator->() { \
+			this->_memberInfo.isNull = false; \
+			return this->_value; \
+		} \
+	};
 
 #define __JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(CTYPE, ETYPE) \
 	template<int arraySize> \
@@ -402,69 +644,69 @@ namespace JsRPC {
 			this->_memberInfo.length = arraySize; \
 		} \
 		void clear() override { memset(_value, 0, sizeof(_value)); } \
-	}
+	};
 
-	__JSRPC_SERIALIZABLE_GENSTYPE(bool, internal::SerializableMemberInfo::ETYPE_BOOL);
-	__JSRPC_SERIALIZABLE_GENSTYPE(char, internal::SerializableMemberInfo::ETYPE_CHAR);
-	__JSRPC_SERIALIZABLE_GENSTYPE(wchar_t, internal::SerializableMemberInfo::ETYPE_WCHAR);
-	__JSRPC_SERIALIZABLE_GENSTYPE(int8_t, internal::SerializableMemberInfo::ETYPE_SINT | 1);
-	__JSRPC_SERIALIZABLE_GENSTYPE(uint8_t, internal::SerializableMemberInfo::ETYPE_UINT | 1);
-	__JSRPC_SERIALIZABLE_GENSTYPE(int16_t, internal::SerializableMemberInfo::ETYPE_SINT | 2);
-	__JSRPC_SERIALIZABLE_GENSTYPE(uint16_t, internal::SerializableMemberInfo::ETYPE_UINT | 2);
-	__JSRPC_SERIALIZABLE_GENSTYPE(int32_t, internal::SerializableMemberInfo::ETYPE_SINT | 4);
-	__JSRPC_SERIALIZABLE_GENSTYPE(uint32_t, internal::SerializableMemberInfo::ETYPE_UINT | 4);
-	__JSRPC_SERIALIZABLE_GENSTYPE(int64_t, internal::SerializableMemberInfo::ETYPE_SINT | 8);
-	__JSRPC_SERIALIZABLE_GENSTYPE(uint64_t, internal::SerializableMemberInfo::ETYPE_UINT | 8);
-	__JSRPC_SERIALIZABLE_GENSTYPE(float, internal::SerializableMemberInfo::ETYPE_FLOAT);
-	__JSRPC_SERIALIZABLE_GENSTYPE(double, internal::SerializableMemberInfo::ETYPE_DOUBLE);
+	__JSRPC_SERIALIZABLE_GENSTYPE(bool, internal::SerializableMemberInfo::ETYPE_BOOL)
+	__JSRPC_SERIALIZABLE_GENSTYPE(char, internal::SerializableMemberInfo::ETYPE_CHAR)
+	__JSRPC_SERIALIZABLE_GENSTYPE(wchar_t, internal::SerializableMemberInfo::ETYPE_WCHAR)
+	__JSRPC_SERIALIZABLE_GENSTYPE(int8_t, internal::SerializableMemberInfo::ETYPE_SINT | 1)
+	__JSRPC_SERIALIZABLE_GENSTYPE(uint8_t, internal::SerializableMemberInfo::ETYPE_UINT | 1)
+	__JSRPC_SERIALIZABLE_GENSTYPE(int16_t, internal::SerializableMemberInfo::ETYPE_SINT | 2)
+	__JSRPC_SERIALIZABLE_GENSTYPE(uint16_t, internal::SerializableMemberInfo::ETYPE_UINT | 2)
+	__JSRPC_SERIALIZABLE_GENSTYPE(int32_t, internal::SerializableMemberInfo::ETYPE_SINT | 4)
+	__JSRPC_SERIALIZABLE_GENSTYPE(uint32_t, internal::SerializableMemberInfo::ETYPE_UINT | 4)
+	__JSRPC_SERIALIZABLE_GENSTYPE(int64_t, internal::SerializableMemberInfo::ETYPE_SINT | 8)
+	__JSRPC_SERIALIZABLE_GENSTYPE(uint64_t, internal::SerializableMemberInfo::ETYPE_UINT | 8)
+	__JSRPC_SERIALIZABLE_GENSTYPE(float, internal::SerializableMemberInfo::ETYPE_FLOAT)
+	__JSRPC_SERIALIZABLE_GENSTYPE(double, internal::SerializableMemberInfo::ETYPE_DOUBLE)
 	
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(bool, internal::SerializableMemberInfo::ETYPE_BOOL);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(char, internal::SerializableMemberInfo::ETYPE_CHAR);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(wchar_t, internal::SerializableMemberInfo::ETYPE_WCHAR);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(int8_t, internal::SerializableMemberInfo::ETYPE_SINT | 1);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(uint8_t, internal::SerializableMemberInfo::ETYPE_UINT | 1);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(int16_t, internal::SerializableMemberInfo::ETYPE_SINT | 2);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(uint16_t, internal::SerializableMemberInfo::ETYPE_UINT | 2);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(int32_t, internal::SerializableMemberInfo::ETYPE_SINT | 4);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(uint32_t, internal::SerializableMemberInfo::ETYPE_UINT | 4);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(int64_t, internal::SerializableMemberInfo::ETYPE_SINT | 8);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(uint64_t, internal::SerializableMemberInfo::ETYPE_UINT | 8);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(float, internal::SerializableMemberInfo::ETYPE_FLOAT);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(double, internal::SerializableMemberInfo::ETYPE_DOUBLE);
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(bool, internal::SerializableMemberInfo::ETYPE_BOOL)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(char, internal::SerializableMemberInfo::ETYPE_CHAR)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(wchar_t, internal::SerializableMemberInfo::ETYPE_WCHAR)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(int8_t, internal::SerializableMemberInfo::ETYPE_SINT | 1)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(uint8_t, internal::SerializableMemberInfo::ETYPE_UINT | 1)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(int16_t, internal::SerializableMemberInfo::ETYPE_SINT | 2)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(uint16_t, internal::SerializableMemberInfo::ETYPE_UINT | 2)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(int32_t, internal::SerializableMemberInfo::ETYPE_SINT | 4)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(uint32_t, internal::SerializableMemberInfo::ETYPE_UINT | 4)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(int64_t, internal::SerializableMemberInfo::ETYPE_SINT | 8)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(uint64_t, internal::SerializableMemberInfo::ETYPE_UINT | 8)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(float, internal::SerializableMemberInfo::ETYPE_FLOAT)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPEWITHNATIVELENGTH(double, internal::SerializableMemberInfo::ETYPE_DOUBLE)
 	
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_STRING(char, internal::SerializableMemberInfo::ETYPE_CHAR);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_STRING(wchar_t, internal::SerializableMemberInfo::ETYPE_WCHAR);
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_STRING(char, internal::SerializableMemberInfo::ETYPE_CHAR)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_STRING(wchar_t, internal::SerializableMemberInfo::ETYPE_WCHAR)
 
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(bool, internal::SerializableMemberInfo::ETYPE_BOOL);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(char, internal::SerializableMemberInfo::ETYPE_CHAR);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(wchar_t, internal::SerializableMemberInfo::ETYPE_WCHAR);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(int8_t, internal::SerializableMemberInfo::ETYPE_SINT | 1);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(uint8_t, internal::SerializableMemberInfo::ETYPE_UINT | 1);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(int16_t, internal::SerializableMemberInfo::ETYPE_SINT | 2);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(uint16_t, internal::SerializableMemberInfo::ETYPE_UINT | 2);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(int32_t, internal::SerializableMemberInfo::ETYPE_SINT | 4);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(uint32_t, internal::SerializableMemberInfo::ETYPE_UINT | 4);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(int64_t, internal::SerializableMemberInfo::ETYPE_SINT | 8);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(uint64_t, internal::SerializableMemberInfo::ETYPE_UINT | 8);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(float, internal::SerializableMemberInfo::ETYPE_FLOAT);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(double, internal::SerializableMemberInfo::ETYPE_DOUBLE);
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(bool, internal::SerializableMemberInfo::ETYPE_BOOL)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(char, internal::SerializableMemberInfo::ETYPE_CHAR)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(wchar_t, internal::SerializableMemberInfo::ETYPE_WCHAR)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(int8_t, internal::SerializableMemberInfo::ETYPE_SINT | 1)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(uint8_t, internal::SerializableMemberInfo::ETYPE_UINT | 1)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(int16_t, internal::SerializableMemberInfo::ETYPE_SINT | 2)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(uint16_t, internal::SerializableMemberInfo::ETYPE_UINT | 2)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(int32_t, internal::SerializableMemberInfo::ETYPE_SINT | 4)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(uint32_t, internal::SerializableMemberInfo::ETYPE_UINT | 4)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(int64_t, internal::SerializableMemberInfo::ETYPE_SINT | 8)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(uint64_t, internal::SerializableMemberInfo::ETYPE_UINT | 8)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(float, internal::SerializableMemberInfo::ETYPE_FLOAT)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_VECTOR(double, internal::SerializableMemberInfo::ETYPE_DOUBLE)
 
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_STRING(char, internal::SerializableMemberInfo::ETYPE_CHAR);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_STRING(wchar_t, internal::SerializableMemberInfo::ETYPE_WCHAR);
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_STRING(char, internal::SerializableMemberInfo::ETYPE_CHAR)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_STRING(wchar_t, internal::SerializableMemberInfo::ETYPE_WCHAR)
 
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(bool, internal::SerializableMemberInfo::ETYPE_BOOL);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(char, internal::SerializableMemberInfo::ETYPE_CHAR);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(wchar_t, internal::SerializableMemberInfo::ETYPE_WCHAR);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(int8_t, internal::SerializableMemberInfo::ETYPE_SINT | 1);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(uint8_t, internal::SerializableMemberInfo::ETYPE_UINT | 1);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(int16_t, internal::SerializableMemberInfo::ETYPE_SINT | 2);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(uint16_t, internal::SerializableMemberInfo::ETYPE_UINT | 2);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(int32_t, internal::SerializableMemberInfo::ETYPE_SINT | 4);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(uint32_t, internal::SerializableMemberInfo::ETYPE_UINT | 4);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(int64_t, internal::SerializableMemberInfo::ETYPE_SINT | 8);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(uint64_t, internal::SerializableMemberInfo::ETYPE_UINT | 8);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(float, internal::SerializableMemberInfo::ETYPE_FLOAT);
-	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(double, internal::SerializableMemberInfo::ETYPE_DOUBLE);
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(bool, internal::SerializableMemberInfo::ETYPE_BOOL)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(char, internal::SerializableMemberInfo::ETYPE_CHAR)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(wchar_t, internal::SerializableMemberInfo::ETYPE_WCHAR)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(int8_t, internal::SerializableMemberInfo::ETYPE_SINT | 1)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(uint8_t, internal::SerializableMemberInfo::ETYPE_UINT | 1)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(int16_t, internal::SerializableMemberInfo::ETYPE_SINT | 2)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(uint16_t, internal::SerializableMemberInfo::ETYPE_UINT | 2)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(int32_t, internal::SerializableMemberInfo::ETYPE_SINT | 4)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(uint32_t, internal::SerializableMemberInfo::ETYPE_UINT | 4)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(int64_t, internal::SerializableMemberInfo::ETYPE_SINT | 8)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(uint64_t, internal::SerializableMemberInfo::ETYPE_UINT | 8)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(float, internal::SerializableMemberInfo::ETYPE_FLOAT)
+	__JSRPC_SERIALIZABLE_GENSARRAYTYPE_LIST_VECTOR(double, internal::SerializableMemberInfo::ETYPE_DOUBLE)
 
 	class Serializable
 	{
