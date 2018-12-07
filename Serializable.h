@@ -108,7 +108,7 @@ namespace JsRPC {
 			void setNull(bool value) {
 				_memberInfo.isNull = value;
 			}
-			const bool isNull() {
+			const bool isNull() const {
 				return _memberInfo.isNull;
 			}
 
@@ -302,7 +302,7 @@ namespace JsRPC {
 		void setNull(bool value) {
 			this->_memberInfo.isNull = value;
 		}
-		const bool isNull() {
+		const bool isNull() const {
 			return this->_memberInfo.isNull;
 		}
 	};
@@ -350,7 +350,7 @@ namespace JsRPC {
 		void setNull(bool value) {
 			this->_memberInfo.isNull = value;
 		}
-		const bool isNull() {
+		const bool isNull() const {
 			return this->_memberInfo.isNull;
 		}
 	};
@@ -433,7 +433,7 @@ namespace JsRPC {
 		void setNull() {
 			this->_memberInfo.isNull = true;
 		}
-		const bool isNull() {
+		const bool isNull() const {
 			return this->_memberInfo.isNull;
 		}
 	};
