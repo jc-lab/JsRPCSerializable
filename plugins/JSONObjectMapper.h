@@ -1,11 +1,29 @@
-#pragma once
+/*
+* Licensed to the Apache Software Foundation (ASF) under one or more
+* contributor license agreements.  See the NOTICE file distributed with
+* this work for additional information regarding copyright ownership.
+* The ASF licenses this file to You under the Apache License, Version 2.0
+* (the "License"); you may not use this file except in compliance with
+* the License.  You may obtain a copy of the License at
+*
+*    http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+/**
+ * @file	JSONObjectMapper.h
+ * @author	Jichan (development@jc-lab.net / http://ablog.jc-lab.net/ )
+ * @date	2018/12/06
+ * @copyright Copyright (C) 2018 jichan.\n
+ *            This software may be modified and distributed under the terms
+ *            of the Apache License 2.0.  See the LICENSE file for details.
+ */
 
-#ifndef HAS_RAPIDJSON
-#define HAS_RAPIDJSON 1
-#endif
-#ifndef HAS_JSCPPUTILS
-#define HAS_JSCPPUTILS 1
-#endif
+#pragma once
 
 #include "../Serializable.h"
 
@@ -28,18 +46,10 @@ namespace JsRPC {
 		{ };
 
 #if defined(HAS_RAPIDJSON) && HAS_RAPIDJSON
-		static void serializeTo(Serializable *serialiable, rapidjson::Document &jsonDoc);
+		static void serializeTo(const Serializable *serialiable, rapidjson::Document &jsonDoc);
 		static void deserializeJsonObject(Serializable *serialiable, const rapidjson::Value &jsonObject);
 
-		template<class AllocatorT>
-		static void serializeTo(Serializable *serialiable, rapidjson::Value &targetObject, AllocatorT &jsonAllocator)
-		{
-			rapidjson::Document jsonDoc;
-			serializeTo(serialiable, jsonDoc);
-			targetObject.CopyFrom(jsonDoc, jsonAllocator);
-		}
-
-		static std::string serialize(Serializable *serialiable)
+		static std::string serialize(const Serializable *serialiable)
 		{
 			rapidjson::Document jsonDoc;
 			rapidjson::StringBuffer jsonBuf;
@@ -54,6 +64,12 @@ namespace JsRPC {
 			rapidjson::Document jsonDoc;
 			jsonDoc.Parse(json.c_str(), json.length());
 			deserializeJsonObject(serialiable, jsonDoc);
+		}
+
+	private:
+		static bool checkFlagsAll(int value, int type)
+		{
+			return (value & type) == type;
 		}
 #endif
 	};

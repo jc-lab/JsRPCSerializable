@@ -1,3 +1,12 @@
+/**
+ * @file	Serializable.cpp
+ * @author	Jichan (development@jc-lab.net / http://ablog.jc-lab.net/ )
+ * @date	2018/12/06
+ * @copyright Copyright (C) 2018 jichan.\n
+ *            This software may be modified and distributed under the terms
+ *            of the Apache License 2.0.  See the LICENSE file for details.
+ */
+ 
 #include "Serializable.h"
 
 namespace JsRPC {
@@ -15,52 +24,22 @@ namespace JsRPC {
 
 	}
 
-	static void writeToPayload(std::vector<unsigned char>& payload, const void *ptr, size_t length) {
+	template<typename T>
+	static void writePtrToPayload(std::vector<unsigned char>& payload, const T *ptr, size_t length) {
 		size_t pos = payload.size();
-		payload.resize(pos + length, 0);
-		memcpy(&payload[pos], ptr, length);
+		if (length > 0)
+		{
+			payload.resize(pos + length, 0);
+			memcpy(&payload[pos], ptr, length);
+		}
 	}
-	static void writeToPayload(std::vector<unsigned char>& payload, char data) {
-		payload.push_back((unsigned char)data);
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, wchar_t data) {
-		writeToPayload(payload, &data, sizeof(data));
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, int8_t data) {
-		writeToPayload(payload, &data, sizeof(data));
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, uint8_t data) {
-		writeToPayload(payload, &data, sizeof(data));
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, int16_t data) {
-		writeToPayload(payload, &data, sizeof(data));
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, uint16_t data) {
-		writeToPayload(payload, &data, sizeof(data));
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, int32_t data) {
-		writeToPayload(payload, &data, sizeof(data));
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, uint32_t data) {
-		writeToPayload(payload, &data, sizeof(data));
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, int64_t data) {
-		writeToPayload(payload, &data, sizeof(data));
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, uint64_t data) {
-		writeToPayload(payload, &data, sizeof(data));
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, float data) {
-		writeToPayload(payload, &data, sizeof(data));
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, double data) {
-		writeToPayload(payload, &data, sizeof(data));
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, const std::basic_string<char> &data) {
-		writeToPayload(payload, data.c_str(), sizeof(char) * data.length());
-	}
-	static void writeToPayload(std::vector<unsigned char>& payload, const std::basic_string<wchar_t> &data) {
-		writeToPayload(payload, data.c_str(), sizeof(wchar_t) * data.length());
+	template<>
+	static void writePtrToPayload<bool>(std::vector<unsigned char>& payload, const bool *ptr, size_t length) {
+		size_t i;
+		for (i = 0; i < length; i++)
+		{
+			payload.push_back(ptr[i] ? 1 : 0);
+		}
 	}
 
 	template<typename T>
@@ -92,737 +71,231 @@ namespace JsRPC {
 		}
 	}
 
-	template<typename T>
-	static void _serializeStdBasicString(std::vector<unsigned char> &payload, const std::basic_string<T> &text)
-	{
-		uint32_t pos;
-		uint32_t length = (uint32_t)text.length();
-		uint32_t datasize = sizeof(T) * length;
-		payload.push_back((unsigned char)(length >> 0));
-		payload.push_back((unsigned char)(length >> 8));
-		payload.push_back((unsigned char)(length >> 16));
-		payload.push_back((unsigned char)(length >> 24));
-		if (text.length() > 0)
-		{
-			pos = payload.size();
-			payload.resize(pos + datasize, 0);
-			memcpy(&payload[pos], &text[0], datasize);
-		}
+	void writeArrayElementSize(std::vector<unsigned char>& payload, uint32_t length) {
+		writePtrToPayload(payload, &length, sizeof(length));
 	}
-
+	
+	// Native Element
 	template<typename T>
-	static void _deserializeStdBasicString(const std::vector<unsigned char> &payload, uint32_t *pos, std::basic_string<T> &text)
-	{
-		uint32_t length = readFromPayload<uint32_t>(payload, pos);
-		uint32_t datasize = sizeof(T) * length;
-		if(length > 0)
-		{
-			const T *textPtr = (const T *)&payload[*pos];
-			text.clear();
-			text = std::basic_string<T>(&textPtr[0], length);
-			*pos += datasize;
-		}
+	static void writeElementToPayload(std::vector<unsigned char>& payload, const T *data) {
+		writePtrToPayload(payload, data, sizeof(T));
 	}
-
-	static void _serializeSubPayload(std::vector<unsigned char> &payload, Serializable *ptr)
-	{
-		if (ptr == NULL)
-		{
-			writeToPayload(payload, (uint32_t)0);
-		}
-		else {
+	static void writeElementToPayload(std::vector<unsigned char>& payload, const bool *data) {
+		payload.push_back((unsigned char)(data ? 1 : 0));
+	}
+	static void writeElementToPayload(std::vector<unsigned char>& payload, const Serializable *data) {
+		if (data) {
 			std::vector<unsigned char> subpayload;
-			ptr->serialize(subpayload);
-			writeToPayload(payload, (uint32_t)subpayload.size());
-			if (subpayload.size() > 0)
-				writeToPayload(payload, &subpayload[0], subpayload.size());
-		}
-	}
-
-	static bool _deserializeSubPayload(const std::vector<unsigned char> &payload, uint32_t *pos, Serializable *ptr)
-	{
-		uint32_t datasize = readFromPayload<uint32_t>(payload, pos);
-		if (!datasize)
-		{
-			return false;
+			data->serialize(subpayload);
+			writeArrayElementSize(payload, subpayload.size());
+			payload.insert(payload.end(), subpayload.begin(), subpayload.end());
 		} else {
-			std::vector<unsigned char> subPayload(payload[*pos], payload[*pos + datasize]);
-			ptr->deserialize(subPayload);
-			*pos += datasize;
-			return true;
-		}
-	}
-
-#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
-	template<typename T>
-	static void _serializeStdListSmartPointerStdBasicString(std::vector<unsigned char> &payload, const void *ptr)
-	{
-		const std::list< JsCPPUtils::SmartPointer< std::basic_string<T> > > *plist = (const std::list< JsCPPUtils::SmartPointer< std::basic_string<T> > > *)ptr;
-		int32_t listSize = plist->size();
-		int32_t i;
-		writeToPayload(payload, listSize);
-		for(std::list< JsCPPUtils::SmartPointer< std::basic_string<T> > >::const_iterator iter = plist->begin(); iter != plist->end(); iter++)
-		{
-			_serializeStdBasicString(payload, *(*iter));
+			writeArrayElementSize(payload, 0);
 		}
 	}
 
 	template<typename T>
-	static void _deserializeStdListSmartPointerStdBasicString(const std::vector<unsigned char> &payload, uint32_t *pos, SerializableMemberInfo &memberInfo)
-	{
-		const std::list< JsCPPUtils::SmartPointer< std::basic_string<T> > > *plist = (const std::list< JsCPPUtils::SmartPointer< std::basic_string<T> > > *)memberInfo.ptr;
-		int32_t listSize = plist->size();
-		int32_t i;
-		uint32_t listcount = readFromPayload<uint32_t>(payload, pos);
-		for (i = 0; i < listcount; i++)
-		{
-			JsCPPUtils::SmartPointer< std::basic_string<T> > spItem = new std::basic_string<T>();
-			_deserializeStdBasicString(payload, pos, *spItem);
-		}
+	static void readElementFromPayload(const std::vector<unsigned char>& payload, uint32_t *pos, T *data) {
+		*data = readFromPayload<T>(payload, pos);
+	}
+	template<>
+	static void readElementFromPayload<bool>(const std::vector<unsigned char>& payload, uint32_t *pos, bool *data) {
+		*data = readFromPayload<unsigned char>(payload, pos) ? true : false;
+	}
+	template<>
+	static void readElementFromPayload<Serializable>(const std::vector<unsigned char>& payload, uint32_t *pos, Serializable *data) {
+		std::vector<unsigned char> subpayload;
+		uint32_t size = readFromPayload<uint32_t>(payload, pos);
+		const unsigned char *endptr = (const unsigned char*)&payload[*pos];
+		endptr += size;
+		subpayload.insert(subpayload.end(), (const unsigned char*)&payload[*pos], endptr);
+		data->deserialize(subpayload);
+		*pos += size;
 	}
 
-	static void _serializeStdListSmartPointerSubPayload(std::vector<unsigned char> &payload, const void *ptr)
+	template <typename T>
+	static void writeElementArrayToPayload(std::vector<unsigned char>& payload, const T* data, size_t length)
 	{
-		const std::list< JsCPPUtils::SmartPointer< Serializable > > *plist = (const std::list< JsCPPUtils::SmartPointer< Serializable > > *)ptr;
-		int32_t listSize = plist->size();
-		int32_t i;
-		writeToPayload(payload, listSize);
-		for (std::list< JsCPPUtils::SmartPointer< Serializable > >::const_iterator iter = plist->begin(); iter != plist->end(); iter++)
-		{
-			_serializeSubPayload(payload, iter->getPtr());
-		}
-	}
-	
-	static void _deserializeStdListSmartPointerSubPayload(const std::vector<unsigned char> &payload, uint32_t *pos, SerializableMemberInfo &memberInfo)
-	{
-		std::list< JsCPPUtils::SmartPointer< Serializable > > *plist = (std::list< JsCPPUtils::SmartPointer< Serializable > > *)memberInfo.ptr;
-		int32_t listSize = readFromPayload<uint32_t>(payload, pos);
-		int32_t i;
-		plist->clear();
-		for (i = 0; i < listSize; i++)
-		{
-			JsCPPUtils::SmartPointer< Serializable > object = memberInfo.createFactory->create();
-			_deserializeSubPayload(payload, pos, object.getPtr());
-			plist->push_back(object);
-		}
-	}
-#endif
-	
-	template<typename T>
-	static void _serializeStdListStdBasicString(std::vector<unsigned char> &payload, const void *ptr)
-	{
-		const std::list< std::basic_string<T> > *plist = (const std::list< std::basic_string<T> > *)ptr;
-		int32_t listSize = plist->size();
-		int32_t i;
-		writeToPayload(payload, listSize);
-		for (std::list< std::basic_string<T> >::const_iterator iter = plist->begin(); iter != plist->end(); iter++)
-		{
-			_serializeStdBasicString(payload, (*iter));
-		}
+		writeArrayElementSize(payload, length);
+		writePtrToPayload(payload, data, sizeof(T) * length);
 	}
 
-	template<typename T>
-	static void _deserializeStdListStdBasicString(const std::vector<unsigned char> &payload, uint32_t *pos, const void *ptr)
+	template <typename T>
+	static void readElementArrayFromPayload(const std::vector<unsigned char>& payload, uint32_t *pos, T* data, size_t length)
 	{
-		std::list< std::basic_string<T> > *plist = (std::list< std::basic_string<T> > *)ptr;
-		int32_t listSize = readFromPayload<uint32_t>(payload, pos);
-		int32_t i;
-		plist->clear();
-		for (i = 0; i < listSize; i++)
-		{
-			std::basic_string<T> text;
-			_deserializeStdBasicString(payload, pos, text);
-			plist->push_back(text);
-		}
-	}
-
-	static void _serializeStdListSubPayload(std::vector<unsigned char> &payload, std::list< JsRPC::Serializable*> *plist)
-	{
-		for (std::list< JsRPC::Serializable*>::iterator iter = plist->begin(); iter != plist->end(); iter++)
-		{
-			if (*iter == NULL)
-			{
-				writeToPayload(payload, (uint32_t)0);
-			} else {
-				std::vector<unsigned char> subpayload;
-				(*iter)->serialize(subpayload);
-				writeToPayload(payload, (uint32_t)subpayload.size());
-				if (subpayload.size() > 0)
-					writeToPayload(payload, &subpayload[0], subpayload.size());
-			}
-		}
-	}
-
-	static void _deserializeStdListSubPayload(const std::vector<unsigned char> &payload, uint32_t *pos, SerializableMemberInfo &memberInfo)
-	{
-		std::list< JsRPC::Serializable*> *plist = (std::list< JsRPC::Serializable*> *)memberInfo.ptr;
-		int32_t listSize = readFromPayload<uint32_t>(payload, pos);
-		int32_t i;
-		plist->clear();
-		for (i = 0; i < listSize; i++)
-		{
-			JsRPC::Serializable *serializable = memberInfo.createFactory->create();
-			uint32_t subpayloadSize = readFromPayload<uint32_t>(payload, pos);
-			if (subpayloadSize > 0)
-			{
-				std::vector<unsigned char> subpayload(subpayloadSize, 0);
-				readFromPayload(payload, pos, &subpayload[0], subpayloadSize);
-				serializable->deserialize(subpayload);
-				plist->push_back(serializable);
-			} else {
-				plist->push_back(NULL);
-			}
-		}
-	}
-
-	static void _serializeStdList(std::vector<unsigned char> &payload, const SerializableMemberInfo &memberInfo)
-	{
-		int32_t i;
-		int32_t listSize;
-#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
-		if (memberInfo.mtype & SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER)
-		{
-			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_CHAR:
-					_serializeStdListSmartPointerStdBasicString<char>(payload, memberInfo.ptr);
-					return;
-				case SerializableMemberInfo::PTYPE_WCHAR:
-					_serializeStdListSmartPointerStdBasicString<wchar_t>(payload, memberInfo.ptr);
-					return;
-				}
-			}
-			else
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_SUBPAYLOAD:
-					_serializeStdListSmartPointerSubPayload(payload, memberInfo.ptr);
-					return;
-				}
-			}
-		}
-		else
-#endif
-		{
-			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_CHAR:
-					_serializeStdListStdBasicString<char>(payload, memberInfo.ptr);
-					return;
-				case SerializableMemberInfo::PTYPE_WCHAR:
-					_serializeStdListStdBasicString<wchar_t>(payload, memberInfo.ptr);
-					return;
-				}
-			}
-			else
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_SUBPAYLOAD:
-					_serializeStdListSubPayload(payload, (std::list<JsRPC::Serializable*>*)memberInfo.ptr);
-					return;
-				}
-			}
-		}
-		throw Serializable::UnavailableTypeException();
-	}
-
-	static void _deserializeStdList(const std::vector<unsigned char> &payload, uint32_t *pos, SerializableMemberInfo &memberInfo)
-	{
-		int32_t i;
-		int32_t listSize;
-#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
-		if (memberInfo.mtype & SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER)
-		{
-			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_CHAR:
-					_deserializeStdListSmartPointerStdBasicString<char>(payload, pos, memberInfo);
-					return;
-				case SerializableMemberInfo::PTYPE_WCHAR:
-					_deserializeStdListSmartPointerStdBasicString<wchar_t>(payload, pos, memberInfo);
-					return;
-				}
-			}
-			else
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_SUBPAYLOAD:
-					_deserializeStdListSmartPointerSubPayload(payload, pos, memberInfo);
-					return;
-				}
-			}
-		}
-		else
-#endif
-		{
-			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_CHAR:
-					_deserializeStdListStdBasicString<char>(payload, pos, memberInfo.ptr);
-					return;
-				case SerializableMemberInfo::PTYPE_WCHAR:
-					_deserializeStdListStdBasicString<wchar_t>(payload, pos, memberInfo.ptr);
-					return;
-				}
-			}
-			else
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_SUBPAYLOAD:
-					_deserializeStdListSubPayload(payload, pos, memberInfo);
-					return;
-				}
-			}
-		}
-		throw Serializable::UnavailableTypeException();
-	}
-
-	static void _clearStdList(const SerializableMemberInfo &memberInfo)
-	{
-		int32_t i;
-		int32_t listSize;
-#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
-		if (memberInfo.mtype & SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER)
-		{
-			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_CHAR:
-					((std::list< JsCPPUtils::SmartPointer< std::basic_string<char> > > *)memberInfo.ptr)->clear();
-					return;
-				case SerializableMemberInfo::PTYPE_WCHAR:
-					((std::list< JsCPPUtils::SmartPointer< std::basic_string<wchar_t> > > *)memberInfo.ptr)->clear();
-					return;
-				}
-			}
-			else
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_SUBPAYLOAD:
-					((std::list< JsCPPUtils::SmartPointer< Serializable > > *)memberInfo.ptr)->clear();
-					return;
-				}
-			}
-		}
-		else
-#endif
-		{
-			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_CHAR:
-					((std::list< std::basic_string<char> > *)memberInfo.ptr)->clear();
-					return;
-				case SerializableMemberInfo::PTYPE_WCHAR:
-					((std::list< std::basic_string<wchar_t> > *)memberInfo.ptr)->clear();
-					return;
-				}
-			}
-			else
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_SUBPAYLOAD:
-					((std::list<JsRPC::Serializable*>*)memberInfo.ptr)->clear();
-					return;
-				}
-			}
-		}
-		throw Serializable::UnavailableTypeException();
-	}
-
-	static void _serializeStdVectorNativeBool(std::vector<unsigned char> &payload, void *ptr)
-	{
-		const std::vector<bool> *pvector = (const std::vector<bool>*)ptr;
-		writeToPayload(payload, (uint32_t)pvector->size());
-		if (pvector->size())
-		{
-			for (std::vector<bool>::const_iterator iter = pvector->begin(); iter != pvector->end(); iter++)
-				payload.push_back(*iter ? 1 : 0);
-		}
-	}
-
-	static void _deserializeStdVectorNativeBool(const std::vector<unsigned char> &payload, uint32_t *pos, void *ptr)
-	{
-		std::vector<bool> *pvector = (std::vector<bool>*)ptr;
-		uint32_t vectorSize = readFromPayload<uint32_t>(payload, pos);
-		uint32_t i;
-		pvector->clear();
-		for (i = 0; i < vectorSize; i++)
-		{
-			pvector->push_back(readFromPayload<char>(payload, pos) ? true : false);
-		}
-	}
-
-	template<typename T>
-	static void _serializeStdVectorNative(std::vector<unsigned char> &payload, void *ptr)
-	{
-		const std::vector<T> *pvector = (const std::vector<T>*)ptr;
-		size_t ds = pvector->size() * sizeof(T);
-		writeToPayload(payload, (uint32_t)pvector->size());
-		if (pvector->size())
-		{
-			writeToPayload(payload, &(*pvector)[0], ds);
-		}
-	}
-
-	template<typename T>
-	static void _deserializeStdVectorNative(const std::vector<unsigned char> &payload, uint32_t *pos, void *ptr)
-	{
-		std::vector<T> *pvector = (std::vector<T>*)ptr;
-		uint32_t vectorSize = readFromPayload<uint32_t>(payload, pos);
-		uint32_t i;
-		pvector->clear();
-		if (vectorSize > 0)
-		{
-			pvector->assign(vectorSize, 0);
-			readFromPayload(payload, pos, (void*)&(*pvector)[0], vectorSize);
-		}
-	}
-
-	template<typename T>
-	static void _clearStdVectorNative(void *ptr)
-	{
-		std::vector<T> *pvector = (std::vector<T>*)ptr;
-		pvector->clear();
-	}
-
-	static void _serializeStdVector(std::vector<unsigned char> &payload, const SerializableMemberInfo &memberInfo)
-	{
-		switch (memberInfo.ptype & 0xFFF)
-		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			_serializeStdVectorNativeBool(payload, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-			_serializeStdVectorNative<int8_t>(payload, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT8:
-			_serializeStdVectorNative<uint8_t>(payload, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT16:
-			_serializeStdVectorNative<int16_t>(payload, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT16:
-			_serializeStdVectorNative<uint16_t>(payload, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT32:
-			_serializeStdVectorNative<int32_t>(payload, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT32:
-			_serializeStdVectorNative<uint32_t>(payload, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT64:
-			_serializeStdVectorNative<int64_t>(payload, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT64:
-			_serializeStdVectorNative<uint64_t>(payload, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_FLOAT:
-			_serializeStdVectorNative<float>(payload, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-			_serializeStdVectorNative<double>(payload, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_CHAR:
-			_serializeStdVectorNative<char>(payload, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			_serializeStdVectorNative<wchar_t>(payload, memberInfo.ptr);
-			return;
-		}
-		throw Serializable::UnavailableTypeException();
-	}
-
-	static void _deserializeStdVector(const std::vector<unsigned char> &payload, uint32_t *pos, const SerializableMemberInfo &memberInfo)
-	{
-		switch (memberInfo.ptype & 0xFFF)
-		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			_deserializeStdVectorNativeBool(payload, pos, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-			_deserializeStdVectorNative<int8_t>(payload, pos, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT8:
-			_deserializeStdVectorNative<uint8_t>(payload, pos, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT16:
-			_deserializeStdVectorNative<int16_t>(payload, pos, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT16:
-			_deserializeStdVectorNative<uint16_t>(payload, pos, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT32:
-			_deserializeStdVectorNative<int32_t>(payload, pos, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT32:
-			_deserializeStdVectorNative<uint32_t>(payload, pos, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT64:
-			_deserializeStdVectorNative<int64_t>(payload, pos, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT64:
-			_deserializeStdVectorNative<uint64_t>(payload, pos, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_FLOAT:
-			_deserializeStdVectorNative<float>(payload, pos, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-			_deserializeStdVectorNative<double>(payload, pos, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_CHAR:
-			_deserializeStdVectorNative<char>(payload, pos, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			_deserializeStdVectorNative<wchar_t>(payload, pos, memberInfo.ptr);
-			return;
-		}
-		throw Serializable::UnavailableTypeException();
-	}
-
-	static void _clearStdVector(const SerializableMemberInfo &memberInfo)
-	{
-		switch (memberInfo.ptype & 0xFFF)
-		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			_clearStdVectorNative<bool>(memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-			_clearStdVectorNative<int8_t>(memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT8:
-			_clearStdVectorNative<uint8_t>(memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT16:
-			_clearStdVectorNative<int16_t>(memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT16:
-			_clearStdVectorNative<uint16_t>(memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT32:
-			_clearStdVectorNative<int32_t>(memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT32:
-			_clearStdVectorNative<uint32_t>(memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT64:
-			_clearStdVectorNative<int64_t>(memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT64:
-			_clearStdVectorNative<uint64_t>(memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_FLOAT:
-			_clearStdVectorNative<float>(memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-			_clearStdVectorNative<double>(memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_CHAR:
-			_clearStdVectorNative<char>(memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			_clearStdVectorNative<wchar_t>(memberInfo.ptr);
-			return;
-		}
-		throw Serializable::UnavailableTypeException();
-	}
-
-	static void _serializeNativeArrayBool(std::vector<unsigned char> &payload, const SerializableMemberInfo &memberInfo)
-	{
-		int32_t i;
-		const bool *pdata = (const bool*)memberInfo.ptr;
-		writeToPayload(payload, (uint32_t)memberInfo.length);
-		for (i = 0; i < memberInfo.length; i++)
-		{
-			payload.push_back(pdata[i] ? 1 : 0);
-		}
-	}
-
-	static void _deserializeNativeArrayBool(const std::vector<unsigned char> &payload, uint32_t *pos, const SerializableMemberInfo &memberInfo)
-	{
-		int32_t i;
-		bool *pdata = (bool*)memberInfo.ptr;
-		uint32_t vectorSize = readFromPayload<uint32_t>(payload, pos);
-		if (memberInfo.length < vectorSize)
+		uint32_t size = readFromPayload<uint32_t>(payload, pos);
+		if (length != size)
 			throw Serializable::ParseException();
-		for (i = 0; i < vectorSize; i++)
+		readFromPayload(payload, pos, data, size * sizeof(T));
+	}
+	template <>
+	static void readElementArrayFromPayload<bool>(const std::vector<unsigned char>& payload, uint32_t *pos, bool* data, size_t length)
+	{
+		uint32_t size = readFromPayload<uint32_t>(payload, pos);
+		size_t ds = length;
+		size_t remainsize = payload.size() - *pos;
+		if (length != size)
+			throw Serializable::ParseException();
+		if (remainsize < ds)
+			throw Serializable::ParseException();
+		if (ds > 0)
 		{
-			pdata[i] = readFromPayload<char>(payload, pos) ? true : false;
+			uint32_t i;
+			for (i = 0; i < size; i++)
+			{
+				data[i] = payload[*(pos++)] ? true : false;
+			}
 		}
 	}
 
-	static void _serializeNativeArray(std::vector<unsigned char> &payload, const SerializableMemberInfo &memberInfo)
-	{
-		switch (memberInfo.ptype & 0xFFF)
+	template <typename T>
+	static void writeElementToPayload(std::vector<unsigned char>& payload, const std::basic_string<T> *data) {
+		uint32_t size = data->length();
+		writeArrayElementSize(payload, size);
+		writePtrToPayload(payload, (const T*)data->c_str(), sizeof(T) * size);
+	}
+	template <typename T>
+	static void readElementFromPayload(const std::vector<unsigned char>& payload, uint32_t *pos, std::basic_string<T> *data) {
+		uint32_t size = readFromPayload<uint32_t>(payload, pos);
+		size_t remainsize = payload.size() - *pos;
+		size_t datasize = size * sizeof(T);
+		data->clear();
+		if(remainsize < datasize)
+			throw Serializable::ParseException();
+		if (size > 0)
 		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			_serializeNativeArrayBool(payload, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-		case SerializableMemberInfo::PTYPE_UINT8:
-		case SerializableMemberInfo::PTYPE_SINT16:
-		case SerializableMemberInfo::PTYPE_UINT16:
-		case SerializableMemberInfo::PTYPE_SINT32:
-		case SerializableMemberInfo::PTYPE_UINT32:
-		case SerializableMemberInfo::PTYPE_SINT64:
-		case SerializableMemberInfo::PTYPE_UINT64:
-		case SerializableMemberInfo::PTYPE_FLOAT:
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-		case SerializableMemberInfo::PTYPE_CHAR:
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			writeToPayload(payload, (uint32_t)memberInfo.length);
-			writeToPayload(payload, memberInfo.ptr, memberInfo.length * (memberInfo.ptype & 0xF));
-			return;
+			*data = std::basic_string<T>((const T*)&payload[*pos], size);
+			*pos += datasize;
 		}
-		throw Serializable::UnavailableTypeException();
+	}
+	template <typename T>
+	static void writeStdVectorToPayload(std::vector<unsigned char>& payload, const std::vector<T> *data) {
+		uint32_t size = data->size();
+		writePtrToPayload(payload, &size, sizeof(size));
+		if(size > 0)
+			writePtrToPayload(payload, &(*data)[0], sizeof(T) * size);
+	}
+	template <>
+	static void writeStdVectorToPayload(std::vector<unsigned char>& payload, const std::vector<bool> *data) {
+		uint32_t size = data->size();
+		writePtrToPayload(payload, &size, sizeof(size));
+		for (std::vector<bool>::const_iterator iter = data->begin(); iter != data->end(); iter++)
+		{
+			bool element = *iter;
+			writeElementToPayload(payload, &element);
+		}
+	}
+	template <typename T>
+	static void readStdVectorFromPayload(const std::vector<unsigned char>& payload, uint32_t *pos, std::vector<T> *data) {
+		uint32_t size = readFromPayload<uint32_t>(payload, pos);
+		size_t remainsize = payload.size() - *pos;
+		size_t datasize = size * sizeof(T);
+		data->clear();
+		if (remainsize < datasize)
+			throw Serializable::ParseException();
+		if (size > 0)
+		{
+			const T* endptr = (const T*)&payload[*pos];
+			endptr += size;
+			data->insert(data->end(), (const T*)&payload[*pos], endptr);
+			*pos += datasize;
+		}
+	}
+	template <>
+	static void readStdVectorFromPayload<bool>(const std::vector<unsigned char>& payload, uint32_t *pos, std::vector<bool> *data) {
+		uint32_t size = readFromPayload<uint32_t>(payload, pos);
+		size_t remainsize = payload.size() - *pos;
+		size_t datasize = size * sizeof(bool);
+		data->clear();
+		if (remainsize < datasize)
+			throw Serializable::ParseException();
+		for (uint32_t i = 0; i < size; i++)
+			data->push_back(&payload[*pos++] ? true : false);
 	}
 
-	static void _deserializeNativeArray(const std::vector<unsigned char> &payload, uint32_t *pos, const SerializableMemberInfo &memberInfo)
+	template <class T>
+	static void writeStdListToPayload(std::vector<unsigned char>& payload, const std::list<T> *data);
+	template <typename T>
+	static void writeStdListToPayload(std::vector<unsigned char>& payload, const std::list< std::basic_string<T> > *data)
 	{
-		uint32_t arrSize;
-		switch (memberInfo.ptype & 0xFFF)
+		uint32_t size = data->size();
+		writeElementToPayload(payload, &size);
+		for (std::list< std::basic_string< T > >::const_iterator iter = data->begin(); iter != data->end(); iter++)
 		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			_deserializeNativeArrayBool(payload, pos, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-		case SerializableMemberInfo::PTYPE_UINT8:
-		case SerializableMemberInfo::PTYPE_SINT16:
-		case SerializableMemberInfo::PTYPE_UINT16:
-		case SerializableMemberInfo::PTYPE_SINT32:
-		case SerializableMemberInfo::PTYPE_UINT32:
-		case SerializableMemberInfo::PTYPE_SINT64:
-		case SerializableMemberInfo::PTYPE_UINT64:
-		case SerializableMemberInfo::PTYPE_FLOAT:
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-		case SerializableMemberInfo::PTYPE_CHAR:
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			arrSize = readFromPayload<uint32_t>(payload, pos);
-			readFromPayload(payload, pos, memberInfo.ptr, (uint32_t)(arrSize * (memberInfo.ptype & 0xF)));
-			return;
+			writePtrToPayload(payload, &size, sizeof(size));
 		}
-		throw Serializable::UnavailableTypeException();
+	}
+	template <typename T>
+	static void writeStdListToPayload(std::vector<unsigned char>& payload, const std::list< std::vector<T> > *data)
+	{
+		uint32_t size = data->size();
+		writeElementToPayload(payload, &size);
+		for (std::list< std::vector< T > >::const_iterator iter = data->begin(); iter != data->end(); iter++)
+		{
+			writePtrToPayload(payload, &size, sizeof(size));
+		}
 	}
 
-	static void _clearNativeArray(const SerializableMemberInfo &memberInfo)
+	template <class T>
+	static void readStdListFromPayload(const std::vector<unsigned char>& payload, uint32_t *pos, std::list<T> *data);
+	template <typename T>
+	static void readStdListFromPayload(const std::vector<unsigned char>& payload, uint32_t *pos, std::list< std::basic_string<T> > *data)
 	{
-		switch (memberInfo.ptype & 0xFFF)
+		uint32_t i;
+		uint32_t size = readFromPayload<uint32_t>(payload, pos);
+		data->clear();
+		for (i = 0; i < size; i++)
 		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			memset((void*)memberInfo.ptr, 0, sizeof(bool) * memberInfo.length);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-		case SerializableMemberInfo::PTYPE_UINT8:
-		case SerializableMemberInfo::PTYPE_SINT16:
-		case SerializableMemberInfo::PTYPE_UINT16:
-		case SerializableMemberInfo::PTYPE_SINT32:
-		case SerializableMemberInfo::PTYPE_UINT32:
-		case SerializableMemberInfo::PTYPE_SINT64:
-		case SerializableMemberInfo::PTYPE_UINT64:
-		case SerializableMemberInfo::PTYPE_FLOAT:
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-		case SerializableMemberInfo::PTYPE_CHAR:
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			memset((void*)memberInfo.ptr, 0, (memberInfo.ptype & 0xF) * memberInfo.length);
-			return;
+			std::basic_string<T> element;
+			readElementFromPayload(payload, pos, &element);
+			data->push_back(element);
 		}
-		throw Serializable::UnavailableTypeException();
+	}
+	template <typename T>
+	static void readStdListFromPayload(const std::vector<unsigned char>& payload, uint32_t *pos, std::list< std::vector<T> > *data)
+	{
+		uint32_t i;
+		uint32_t size = readFromPayload<uint32_t>(payload, pos);
+		data->clear();
+		for (i = 0; i < size; i++)
+		{
+			std::vector<T> element;
+			readStdVectorFromPayload(payload, pos, &element);
+			data->push_back(element);
+		}
 	}
 
-	static void _serializeNativeObject(std::vector<unsigned char> &payload, const SerializableMemberInfo &memberInfo)
+	void Serializable::serializableMapMember(const char *name, internal::STypeCommon &object)
 	{
-		switch (memberInfo.ptype & 0xFFF)
-		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			writeToPayload(payload, (uint8_t)((*((bool*)memberInfo.ptr)) ? 1 : 0));
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-		case SerializableMemberInfo::PTYPE_UINT8:
-		case SerializableMemberInfo::PTYPE_SINT16:
-		case SerializableMemberInfo::PTYPE_UINT16:
-		case SerializableMemberInfo::PTYPE_SINT32:
-		case SerializableMemberInfo::PTYPE_UINT32:
-		case SerializableMemberInfo::PTYPE_SINT64:
-		case SerializableMemberInfo::PTYPE_UINT64:
-		case SerializableMemberInfo::PTYPE_FLOAT:
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-		case SerializableMemberInfo::PTYPE_CHAR:
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			writeToPayload(payload, memberInfo.ptr, (memberInfo.ptype & 0xF));
-			return;
-		}
-		throw Serializable::UnavailableTypeException();
+		object._memberInfo.name = name;
+		m_members.push_back(&object);
 	}
 
-	static void _deserializeNativeObject(const std::vector<unsigned char> &payload, uint32_t *pos, const SerializableMemberInfo &memberInfo)
+	void Serializable::serializableClearObjects()
 	{
-		switch (memberInfo.ptype & 0xFFF)
+		for (std::list<internal::STypeCommon*>::const_iterator iter = m_members.begin(); iter != m_members.end(); iter++)
 		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			*((bool*)memberInfo.ptr) = readFromPayload<char>(payload, pos) ? true : false;
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-		case SerializableMemberInfo::PTYPE_UINT8:
-		case SerializableMemberInfo::PTYPE_SINT16:
-		case SerializableMemberInfo::PTYPE_UINT16:
-		case SerializableMemberInfo::PTYPE_SINT32:
-		case SerializableMemberInfo::PTYPE_UINT32:
-		case SerializableMemberInfo::PTYPE_SINT64:
-		case SerializableMemberInfo::PTYPE_UINT64:
-		case SerializableMemberInfo::PTYPE_FLOAT:
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-		case SerializableMemberInfo::PTYPE_CHAR:
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			readFromPayload(payload, pos, memberInfo.ptr, (memberInfo.ptype & 0xF));
-			return;
+			(*iter)->clear();
 		}
-		throw Serializable::UnavailableTypeException();
 	}
 
-	static void _clearNativeObject(const SerializableMemberInfo &memberInfo)
+	static void _serializeCheckNotEoo(uint16_t *tempEtype, std::list<internal::SerializableMemberInfo::EncapType>::const_iterator *iterEncap, std::list<internal::SerializableMemberInfo::EncapType>::const_iterator endOfEncap)
 	{
-		switch (memberInfo.ptype & 0xFFF)
-		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			*((bool*)memberInfo.ptr) = 0;
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-		case SerializableMemberInfo::PTYPE_UINT8:
-		case SerializableMemberInfo::PTYPE_SINT16:
-		case SerializableMemberInfo::PTYPE_UINT16:
-		case SerializableMemberInfo::PTYPE_SINT32:
-		case SerializableMemberInfo::PTYPE_UINT32:
-		case SerializableMemberInfo::PTYPE_SINT64:
-		case SerializableMemberInfo::PTYPE_UINT64:
-		case SerializableMemberInfo::PTYPE_FLOAT:
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-		case SerializableMemberInfo::PTYPE_CHAR:
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			memset((void*)memberInfo.ptr, 0, (memberInfo.ptype & 0xF));
-			return;
-		}
-		throw Serializable::UnavailableTypeException();
+		if ((*iterEncap) == endOfEncap)
+			throw Serializable::UnavailableTypeException();
+		*tempEtype = *((*iterEncap)++);
 	}
 
-	void Serializable::serialize(std::vector<unsigned char>& payload) throw(UnavailableTypeException)
+	static void _serializeCheckEoo(uint16_t *tempEtype, std::list<internal::SerializableMemberInfo::EncapType>::const_iterator *iterEncap, std::list<internal::SerializableMemberInfo::EncapType>::const_iterator endOfEncap)
 	{
-		size_t pos = 0;
+		*tempEtype = *((*iterEncap)++);
+		if ((*iterEncap) != endOfEncap)
+			throw Serializable::UnavailableTypeException();
+	}
+
+	void Serializable::serialize(std::vector<unsigned char>& payload) const throw(UnavailableTypeException)
+	{
+		uint32_t pos = 0;
 
 		payload.clear();
 		payload.assign(sizeof(header) + 9 + m_name.length(), 0);
@@ -844,48 +317,285 @@ namespace JsRPC {
 		payload[pos++] = ((unsigned char)(m_serialVersionUID >> 56));
 
 		// Data
-		for (std::list<SerializableMemberInfo>::const_iterator iter = m_members.begin(); iter != m_members.end(); iter++)
+		for (std::list<internal::STypeCommon*>::const_iterator iterMem = m_members.begin(); iterMem != m_members.end(); iterMem++)
 		{
-			int i;
-			uint32_t size = 0;
-			int32_t listLength = 1;
-			payload.push_back((unsigned char)(iter->ptype >> 0)); // PType
-			payload.push_back((unsigned char)(iter->ptype >> 8)); // PType
-			if (iter->ptype & SerializableMemberInfo::PTYPE_LIST)
+			std::list<internal::SerializableMemberInfo::EncapType>::const_iterator iterEncap = (*iterMem)->_memberInfo.encaps.begin();
+			std::list<internal::SerializableMemberInfo::EncapType>::const_iterator endOfEncap = (*iterMem)->_memberInfo.encaps.end();
+			uint16_t tempEtype;
+			_serializeCheckNotEoo(&tempEtype, &iterEncap, endOfEncap);
+			if ((*iterMem)->isNull())
 			{
-				// List
-				if (iter->mtype & SerializableMemberInfo::MTYPE_STDLIST)
-				{
-					_serializeStdList(payload, *iter);
-				}
+				tempEtype |= internal::SerializableMemberInfo::EncapType::ETYPE_NULL;
+				writeElementToPayload(payload, &tempEtype);
 			}
-			else if (iter->ptype & SerializableMemberInfo::PTYPE_ARRAY)
-			{
-				// Single object
-				if (iter->mtype & SerializableMemberInfo::MTYPE_STDVECTOR)
+			else {
+				writeElementToPayload(payload, &tempEtype);
+				if ((tempEtype & 0xFF00) == internal::SerializableMemberInfo::EncapType::ETYPE_NATIVE)
 				{
-					_serializeStdVector(payload, *iter);
-				}else if (iter->mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-				{
-					switch (iter->ptype & 0xFFF)
+					switch (tempEtype & 0x00FF)
 					{
-					case SerializableMemberInfo::PTYPE_CHAR:
-						_serializeStdBasicString(payload, *(std::basic_string<char>*)iter->ptr);
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_BOOL):
+						writeElementToPayload<bool>(payload, (bool*)((*iterMem)->_memberInfo.ptr));
 						break;
-					case SerializableMemberInfo::PTYPE_WCHAR:
-						_serializeStdBasicString(payload, *(std::basic_string<wchar_t>*)iter->ptr);
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+						writeElementToPayload<int8_t>(payload, (int8_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+						writeElementToPayload<uint8_t>(payload, (uint8_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+						writeElementToPayload<int16_t>(payload, (int16_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+						writeElementToPayload<uint16_t>(payload, (uint16_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+						writeElementToPayload<int32_t>(payload, (int32_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+						writeElementToPayload<uint32_t>(payload, (uint32_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+						writeElementToPayload<int64_t>(payload, (int64_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+						writeElementToPayload<uint64_t>(payload, (uint64_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+						writeElementToPayload<char>(payload, (char*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+						writeElementToPayload<wchar_t>(payload, (wchar_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_FLOAT):
+						writeElementToPayload<float>(payload, (float*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_DOUBLE):
+						writeElementToPayload<double>(payload, (double*)((*iterMem)->_memberInfo.ptr));
 						break;
 					default:
 						throw UnavailableTypeException();
 					}
-				}else{
-					_serializeNativeArray(payload, *iter);
 				}
-			}
-			else
-			{
-				// Just object
-				_serializeNativeObject(payload, *iter);
+				else {
+					switch (tempEtype)
+					{
+					case internal::SerializableMemberInfo::EncapType::ETYPE_STDBASICSTRING:
+						_serializeCheckNotEoo(&tempEtype, &iterEncap, endOfEncap);
+						writeElementToPayload(payload, &tempEtype);
+						if (iterEncap != endOfEncap)
+							throw UnavailableTypeException();
+						if (checkFlagsAll(tempEtype, internal::SerializableMemberInfo::EncapType::ETYPE_CHAR))
+							writeElementToPayload(payload, (const std::basic_string<char>*)(*iterMem)->_memberInfo.ptr);
+						else if (checkFlagsAll(tempEtype, internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR))
+							writeElementToPayload(payload, (const std::basic_string<wchar_t>*)(*iterMem)->_memberInfo.ptr);
+						else
+							throw UnavailableTypeException();
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_STDVECTOR:
+						_serializeCheckNotEoo(&tempEtype, &iterEncap, endOfEncap);
+						writeElementToPayload(payload, &tempEtype);
+						if (iterEncap != endOfEncap)
+							throw UnavailableTypeException();
+						switch (tempEtype & 0x00FF)
+						{
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_BOOL):
+							writeStdVectorToPayload(payload, (std::vector<bool>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+							writeStdVectorToPayload(payload, (std::vector<int8_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+							writeStdVectorToPayload(payload, (std::vector<uint8_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+							writeStdVectorToPayload(payload, (std::vector<int16_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+							writeStdVectorToPayload(payload, (std::vector<uint16_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+							writeStdVectorToPayload(payload, (std::vector<int32_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+							writeStdVectorToPayload(payload, (std::vector<uint32_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+							writeStdVectorToPayload(payload, (std::vector<int64_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+							writeStdVectorToPayload(payload, (std::vector<uint64_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+							writeStdVectorToPayload(payload, (std::vector<char>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+							writeStdVectorToPayload(payload, (std::vector<wchar_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_FLOAT):
+							writeStdVectorToPayload(payload, (std::vector<float>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_DOUBLE):
+							writeStdVectorToPayload(payload, (std::vector<double>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						default:
+							throw UnavailableTypeException();
+						}
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_STDLIST:
+						_serializeCheckNotEoo(&tempEtype, &iterEncap, endOfEncap);
+						writeElementToPayload(payload, &tempEtype);
+						if (iterEncap == endOfEncap)
+						{
+							throw UnavailableTypeException();
+						}
+						else {
+							switch (tempEtype)
+							{
+							case internal::SerializableMemberInfo::EncapType::ETYPE_SMARTPOINTER:
+								tempEtype = *(iterEncap++);
+								writeElementToPayload(payload, &tempEtype);
+								switch (tempEtype)
+								{
+								case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
+									if (iterEncap != endOfEncap)
+										throw UnavailableTypeException();
+									writeArrayElementSize(payload, ((std::list<JsCPPUtils::SmartPointer<Serializable> >*)(*iterMem)->_memberInfo.ptr)->size());
+									for (std::list<JsCPPUtils::SmartPointer<Serializable> >::const_iterator subiter = ((std::list<JsCPPUtils::SmartPointer<Serializable> >*)(*iterMem)->_memberInfo.ptr)->begin(); subiter != ((std::list<JsCPPUtils::SmartPointer<Serializable> >*)(*iterMem)->_memberInfo.ptr)->end(); subiter++)
+									{
+										writeElementToPayload(payload, subiter->getPtr());
+									}
+									break;
+								default:
+									throw UnavailableTypeException();
+								}
+								break;
+							case internal::SerializableMemberInfo::EncapType::ETYPE_STDVECTOR:
+								_serializeCheckEoo(&tempEtype, &iterEncap, endOfEncap);
+								writeElementToPayload(payload, &tempEtype);
+								switch (tempEtype & 0x00FF)
+								{
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+									writeStdListToPayload(payload, (std::list< std::vector<int8_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+									writeStdListToPayload(payload, (std::list< std::vector<uint8_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+									writeStdListToPayload(payload, (std::list< std::vector<int16_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+									writeStdListToPayload(payload, (std::list< std::vector<uint16_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+									writeStdListToPayload(payload, (std::list< std::vector<int32_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+									writeStdListToPayload(payload, (std::list< std::vector<uint32_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+									writeStdListToPayload(payload, (std::list< std::vector<int64_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+									writeStdListToPayload(payload, (std::list< std::vector<uint64_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+									writeStdListToPayload(payload, (std::list< std::vector<char> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+									writeStdListToPayload(payload, (std::list< std::vector<wchar_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								default:
+									throw UnavailableTypeException();
+								}
+								break;
+							case internal::SerializableMemberInfo::EncapType::ETYPE_STDBASICSTRING:
+								_serializeCheckEoo(&tempEtype, &iterEncap, endOfEncap);
+								writeElementToPayload(payload, &tempEtype);
+								if (checkFlagsAll(tempEtype, internal::SerializableMemberInfo::EncapType::ETYPE_CHAR))
+									writeStdListToPayload(payload, (std::list< std::basic_string<char> > *)(*iterMem)->_memberInfo.ptr);
+								else if (checkFlagsAll(tempEtype, internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR))
+									writeStdListToPayload(payload, (std::list<std::basic_string<wchar_t> >*)(*iterMem)->_memberInfo.ptr);
+								else
+									throw UnavailableTypeException();
+							default:
+								throw UnavailableTypeException();
+							}
+						}
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
+						writeElementToPayload(payload, (Serializable*)(*iterMem)->_memberInfo.ptr);
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_SMARTPOINTER:
+						tempEtype = *(iterEncap++);
+						switch (tempEtype)
+						{
+						case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
+							if (iterEncap != endOfEncap)
+								throw UnavailableTypeException();
+							if (!((JsCPPUtils::SmartPointer<Serializable>*)(*iterMem)->_memberInfo.ptr)->getPtr() || (*iterMem)->isNull())
+							{
+								tempEtype |= internal::SerializableMemberInfo::EncapType::ETYPE_NULL;
+								writeElementToPayload(payload, &tempEtype);
+							} else {
+								writeElementToPayload(payload, &tempEtype);
+								writeElementToPayload(payload, ((JsCPPUtils::SmartPointer<Serializable>*)(*iterMem)->_memberInfo.ptr)->getPtr());
+							}
+
+							break;
+						default:
+							throw UnavailableTypeException();
+						}
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_NATIVEARRAY:
+						switch (tempEtype & 0x00FF)
+						{
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_BOOL):
+							writeElementArrayToPayload(payload, (int8_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+							writeElementArrayToPayload(payload, (int8_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+							writeElementArrayToPayload(payload, (uint8_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+							writeElementArrayToPayload(payload, (int16_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+							writeElementArrayToPayload(payload, (uint16_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+							writeElementArrayToPayload(payload, (int32_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+							writeElementArrayToPayload(payload, (uint32_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+							writeElementArrayToPayload(payload, (int64_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+							writeElementArrayToPayload(payload, (uint64_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+							writeElementArrayToPayload(payload, (char*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+							writeElementArrayToPayload(payload, (wchar_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_FLOAT):
+							writeElementArrayToPayload(payload, (float*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_DOUBLE):
+							writeElementArrayToPayload(payload, (double*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+						default:
+							throw UnavailableTypeException();
+						}
+						break;
+					default:
+						throw UnavailableTypeException();
+					}
+				}
 			}
 		}
 	}
@@ -898,7 +608,7 @@ namespace JsRPC {
 		int headersize = sizeof(header) + 9 + m_name.length();
 		unsigned char serialVersionUID[8];
 
-		std::list<SerializableMemberInfo>::iterator memberInfoIter = m_members.begin();
+		std::list<internal::STypeCommon*>::iterator iterMem = m_members.begin();
 
 		if (payload.size() < headersize)
 		{
@@ -933,152 +643,303 @@ namespace JsRPC {
 		pos += 8;
 
 		remainsize = totalsize - pos;
-		while (remainsize > 0 && memberInfoIter != m_members.end())
+		while (remainsize > 0 && iterMem != m_members.end())
 		{
-			SerializableMemberInfo::ProtoType ptype = (SerializableMemberInfo::ProtoType)readFromPayload<uint16_t>(payload, &pos);
-			if (ptype & SerializableMemberInfo::PTYPE_LIST)
+			std::list<internal::SerializableMemberInfo::EncapType>::const_iterator iterEncap = (*iterMem)->_memberInfo.encaps.begin();
+			std::list<internal::SerializableMemberInfo::EncapType>::const_iterator endOfEncap = (*iterMem)->_memberInfo.encaps.end();
+			uint16_t tempEtypeRecv;
+			uint16_t tempEtypeReal;
+			_serializeCheckNotEoo(&tempEtypeReal, &iterEncap, endOfEncap);
+			tempEtypeRecv = readFromPayload<uint16_t>(payload, &pos);
+			(*iterMem)->clear();
+			(*iterMem)->setNull(tempEtypeRecv & internal::SerializableMemberInfo::EncapType::ETYPE_NULL);
+			if (!(tempEtypeRecv & internal::SerializableMemberInfo::EncapType::ETYPE_NULL))
 			{
-				// List
-				if (memberInfoIter->mtype & SerializableMemberInfo::MTYPE_STDLIST)
+				if ((tempEtypeRecv & 0xFF00) == internal::SerializableMemberInfo::EncapType::ETYPE_NATIVE)
 				{
-					_deserializeStdList(payload, &pos, *memberInfoIter);
-				}
-			}
-			else if (ptype & SerializableMemberInfo::PTYPE_ARRAY)
-			{
-				// Single object
-				if (memberInfoIter->mtype & SerializableMemberInfo::MTYPE_STDVECTOR)
-				{
-					_deserializeStdVector(payload, &pos, *memberInfoIter);
-				}
-				else if (memberInfoIter->mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-				{
-					switch (memberInfoIter->ptype & 0xFFF)
+					switch (tempEtypeRecv & 0x00FF)
 					{
-					case SerializableMemberInfo::PTYPE_CHAR:
-						_deserializeStdBasicString(payload, &pos, *(std::basic_string<char>*)memberInfoIter->ptr);
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_BOOL):
+						readElementFromPayload<bool>(payload, &pos, (bool*)((*iterMem)->_memberInfo.ptr));
 						break;
-					case SerializableMemberInfo::PTYPE_WCHAR:
-						_deserializeStdBasicString(payload, &pos, *(std::basic_string<wchar_t>*)memberInfoIter->ptr);
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+						readElementFromPayload<int8_t>(payload, &pos, (int8_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+						readElementFromPayload<uint8_t>(payload, &pos, (uint8_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+						readElementFromPayload<int16_t>(payload, &pos, (int16_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+						readElementFromPayload<uint16_t>(payload, &pos, (uint16_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+						readElementFromPayload<int32_t>(payload, &pos, (int32_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+						readElementFromPayload<uint32_t>(payload, &pos, (uint32_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+						readElementFromPayload<int64_t>(payload, &pos, (int64_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+						readElementFromPayload<uint64_t>(payload, &pos, (uint64_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+						readElementFromPayload<char>(payload, &pos, (char*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+						readElementFromPayload<wchar_t>(payload, &pos, (wchar_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_FLOAT):
+						readElementFromPayload<float>(payload, &pos, (float*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_DOUBLE):
+						readElementFromPayload<double>(payload, &pos, (double*)((*iterMem)->_memberInfo.ptr));
 						break;
 					default:
 						throw UnavailableTypeException();
 					}
-				} else {
-					_deserializeNativeArray(payload, &pos, *memberInfoIter);
+				}
+				else {
+					switch (tempEtypeRecv)
+					{
+					case internal::SerializableMemberInfo::EncapType::ETYPE_STDBASICSTRING:
+						_serializeCheckEoo(&tempEtypeReal, &iterEncap, endOfEncap);
+						tempEtypeRecv = readFromPayload<uint16_t>(payload, &pos);
+						if (iterEncap != endOfEncap)
+							throw UnavailableTypeException();
+						if (checkFlagsAll(tempEtypeReal, internal::SerializableMemberInfo::EncapType::ETYPE_CHAR))
+							readElementFromPayload(payload, &pos, (std::basic_string<char>*)(*iterMem)->_memberInfo.ptr);
+						else if (checkFlagsAll(tempEtypeReal, internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR))
+							readElementFromPayload(payload, &pos, (std::basic_string<wchar_t>*)(*iterMem)->_memberInfo.ptr);
+						else
+							throw UnavailableTypeException();
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_STDVECTOR:
+						_serializeCheckNotEoo(&tempEtypeReal, &iterEncap, endOfEncap);
+						tempEtypeRecv = readFromPayload<uint16_t>(payload, &pos);
+						if (iterEncap != endOfEncap)
+							throw UnavailableTypeException();
+						if (!(tempEtypeRecv & internal::SerializableMemberInfo::EncapType::ETYPE_NULL))
+						{
+							switch (tempEtypeRecv & 0x00FF)
+							{
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_BOOL):
+								readStdVectorFromPayload(payload, &pos,(std::vector<bool>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+								readStdVectorFromPayload(payload, &pos, (std::vector<int8_t>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+								readStdVectorFromPayload(payload, &pos, (std::vector<uint8_t>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+								readStdVectorFromPayload(payload, &pos, (std::vector<int16_t>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+								readStdVectorFromPayload(payload, &pos, (std::vector<uint16_t>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+								readStdVectorFromPayload(payload, &pos, (std::vector<int32_t>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+								readStdVectorFromPayload(payload, &pos, (std::vector<uint32_t>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+								readStdVectorFromPayload(payload, &pos, (std::vector<int64_t>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+								readStdVectorFromPayload(payload, &pos, (std::vector<uint64_t>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+								readStdVectorFromPayload(payload, &pos, (std::vector<char>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+								readStdVectorFromPayload(payload, &pos, (std::vector<wchar_t>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_FLOAT):
+								readStdVectorFromPayload(payload, &pos, (std::vector<float>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_DOUBLE):
+								readStdVectorFromPayload(payload, &pos, (std::vector<double>*)((*iterMem)->_memberInfo.ptr));
+								break;
+							default:
+								throw UnavailableTypeException();
+							}
+						}
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_STDLIST:
+						_serializeCheckNotEoo(&tempEtypeReal, &iterEncap, endOfEncap);
+						tempEtypeRecv = readFromPayload<uint16_t>(payload, &pos);
+						if (iterEncap == endOfEncap)
+						{
+							throw UnavailableTypeException();
+						}
+						else {
+							switch (tempEtypeReal)
+							{
+							case internal::SerializableMemberInfo::EncapType::ETYPE_SMARTPOINTER:
+								tempEtypeReal = *(iterEncap++);
+								tempEtypeRecv = readFromPayload<uint16_t>(payload, &pos);
+								switch (tempEtypeReal)
+								{
+								case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
+									if (iterEncap != endOfEncap)
+										throw UnavailableTypeException();
+									{
+										uint32_t i;
+										uint32_t length = readFromPayload<uint32_t>(payload, &pos);
+										std::list<JsCPPUtils::SmartPointer<Serializable> > *plist = ((std::list<JsCPPUtils::SmartPointer<Serializable> >*)(*iterMem)->_memberInfo.ptr);
+										plist->clear();
+										for (i = 0; i < length; i++)
+										{
+											JsCPPUtils::SmartPointer<Serializable> obj = (*iterMem)->_memberInfo.createFactory->create();
+											readElementFromPayload(payload, &pos, obj.getPtr());
+											plist->push_back(obj);
+										}
+									}
+									break;
+								default:
+									throw UnavailableTypeException();
+								}
+								break;
+							case internal::SerializableMemberInfo::EncapType::ETYPE_STDVECTOR:
+								_serializeCheckEoo(&tempEtypeReal, &iterEncap, endOfEncap);
+								tempEtypeRecv = readFromPayload<uint16_t>(payload, &pos);
+								switch (tempEtypeReal & 0x00FF)
+								{
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+									readStdListFromPayload(payload, &pos, (std::list< std::vector<int8_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+									readStdListFromPayload(payload, &pos, (std::list< std::vector<uint8_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+									readStdListFromPayload(payload, &pos, (std::list< std::vector<int16_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+									readStdListFromPayload(payload, &pos, (std::list< std::vector<uint16_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+									readStdListFromPayload(payload, &pos, (std::list< std::vector<int32_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+									readStdListFromPayload(payload, &pos, (std::list< std::vector<uint32_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+									readStdListFromPayload(payload, &pos, (std::list< std::vector<int64_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+									readStdListFromPayload(payload, &pos, (std::list< std::vector<uint64_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+									readStdListFromPayload(payload, &pos, (std::list< std::vector<char> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+									readStdListFromPayload(payload, &pos, (std::list< std::vector<wchar_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								default:
+									throw UnavailableTypeException();
+								}
+								break;
+							case internal::SerializableMemberInfo::EncapType::ETYPE_STDBASICSTRING:
+								_serializeCheckEoo(&tempEtypeReal, &iterEncap, endOfEncap);
+								tempEtypeRecv = readFromPayload<uint16_t>(payload, &pos);
+								if (checkFlagsAll(tempEtypeReal, internal::SerializableMemberInfo::EncapType::ETYPE_CHAR))
+									readStdListFromPayload(payload, &pos, (std::list< std::basic_string<char> > *)(*iterMem)->_memberInfo.ptr);
+								else if (checkFlagsAll(tempEtypeReal, internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR))
+									readStdListFromPayload(payload, &pos, (std::list<std::basic_string<wchar_t> >*)(*iterMem)->_memberInfo.ptr);
+								else
+									throw UnavailableTypeException();
+							default:
+								throw UnavailableTypeException();
+							}
+						}
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
+						readElementFromPayload(payload, &pos, (Serializable*)(*iterMem)->_memberInfo.ptr);
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_SMARTPOINTER:
+						tempEtypeReal = *(iterEncap++);
+						tempEtypeRecv = readFromPayload<uint16_t>(payload, &pos);
+						if (tempEtypeRecv & internal::SerializableMemberInfo::EncapType::ETYPE_NULL)
+						{
+							(*iterMem)->setNull();
+						}else{
+							switch (tempEtypeReal & 0xFF00)
+							{
+							case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
+								if (!(tempEtypeRecv & internal::SerializableMemberInfo::EncapType::ETYPE_NULL))
+								{
+									JsCPPUtils::SmartPointer<Serializable> obj = (*iterMem)->_memberInfo.createFactory->create();
+									readElementFromPayload(payload, &pos, (Serializable*)obj.getPtr());
+								}
+							default:
+								throw UnavailableTypeException();
+							}
+						}
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_NATIVEARRAY:
+						switch (tempEtypeRecv & 0x00FF)
+						{
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_BOOL):
+							readElementArrayFromPayload(payload, &pos, (int8_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+							readElementArrayFromPayload(payload, &pos, (int8_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+							readElementArrayFromPayload(payload, &pos, (uint8_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+							readElementArrayFromPayload(payload, &pos, (int16_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+							readElementArrayFromPayload(payload, &pos, (uint16_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+							readElementArrayFromPayload(payload, &pos, (int32_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+							readElementArrayFromPayload(payload, &pos, (uint32_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+							readElementArrayFromPayload(payload, &pos, (int64_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+							readElementArrayFromPayload(payload, &pos, (uint64_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+							readElementArrayFromPayload(payload, &pos, (char*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+							readElementArrayFromPayload(payload, &pos, (wchar_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_FLOAT):
+							readElementArrayFromPayload(payload, &pos, (float*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_DOUBLE):
+							readElementArrayFromPayload(payload, &pos, (double*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+						default:
+							throw UnavailableTypeException();
+						}
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_NULL:
+						(*iterMem)->setNull();
+						break;
+					default:
+						throw UnavailableTypeException();
+					}
 				}
 			}
-			else
-			{
-				// Just object
-				_deserializeNativeObject(payload, &pos, *memberInfoIter);
-			}
+			iterMem++;
 			remainsize = totalsize - pos;
-			memberInfoIter++;
 		}
 		if (remainsize != 0)
 			throw ParseException();
+		if (iterMem != m_members.end())
+			throw ParseException();
 	}
-
-	void Serializable::clearObject(Serializable *serializable)
-	{
-		const std::list<SerializableMemberInfo> &serializableMembers = serializable->serializableMembers();
-		for (std::list<SerializableMemberInfo>::const_iterator iter = serializableMembers.begin(); iter != serializableMembers.end(); iter++)
-		{
-			int i;
-			uint32_t size = 0;
-			int32_t listLength = 1;
-			if (iter->ptype & SerializableMemberInfo::PTYPE_LIST)
-			{
-				// List
-				if (iter->mtype & SerializableMemberInfo::MTYPE_STDLIST)
-				{
-					_clearStdList(*iter);
-				}
-			}
-			else if (iter->ptype & SerializableMemberInfo::PTYPE_ARRAY)
-			{
-				// Single object
-				if (iter->mtype & SerializableMemberInfo::MTYPE_STDVECTOR)
-				{
-					_clearStdVector(*iter);
-				}else if (iter->mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-				{
-					switch (iter->ptype & 0xFFF)
-					{
-					case SerializableMemberInfo::PTYPE_CHAR:
-						((std::basic_string<char>*)iter->ptr)->clear();
-						break;
-					case SerializableMemberInfo::PTYPE_WCHAR:
-						((std::basic_string<wchar_t>*)iter->ptr)->clear();
-						break;
-					default:
-						throw UnavailableTypeException();
-					}
-				}else{
-					_clearNativeArray(*iter);
-				}
-			}
-			else
-			{
-				// Just object
-				_clearNativeObject(*iter);
-			}
-		}
-	}
-
-	void Serializable::serializableMapMember(const char *name, bool &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_BOOL, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, char &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_CHAR, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, wchar_t &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_WCHAR, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, int8_t &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_SINT8, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, uint8_t &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_UINT8, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, int16_t &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_SINT16, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, uint16_t &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_UINT16, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, int32_t &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_SINT32, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, uint32_t &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_UINT32, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, int64_t &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_SINT64, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, uint64_t &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_UINT64, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, float &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_FLOAT, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, double &object){ m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_DOUBLE, SerializableMemberInfo::MTYPE_NATIVE, (void*)&object, 1)); }
-	void Serializable::serializableMapMember(const char *name, Serializable *object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_SUBPAYLOAD), SerializableMemberInfo::MTYPE_NATIVE, (void*)object, 1)); }
-#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
-	SerializableMemberInfo & Serializable::serializableMapMember(const char *name, JsCPPUtils::SmartPointer<Serializable> *object) { m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_SUBPAYLOAD, (SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER), (void*)&object, 0)); return *m_members.rbegin(); }
-#endif
-
-	void Serializable::serializableMapMemberArray(const char *name, std::basic_string<char> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_CHAR), SerializableMemberInfo::MTYPE_STDBASICSTRING, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::basic_string<wchar_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_WCHAR), SerializableMemberInfo::MTYPE_STDBASICSTRING, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::vector<char> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_CHAR), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::vector<wchar_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_WCHAR), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::vector<int8_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_SINT8), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::vector<uint8_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_UINT8), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::vector<int16_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_SINT16), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::vector<uint16_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_UINT16), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::vector<int32_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_SINT32), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::vector<uint32_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_UINT32), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::vector<int64_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_SINT64), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::vector<uint64_t> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_UINT64), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::vector<float> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_FLOAT), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
-	void Serializable::serializableMapMemberArray(const char *name, std::vector<double> &object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_DOUBLE), SerializableMemberInfo::MTYPE_STDVECTOR, (void*)&object, 1)); }
-
-	void Serializable::serializableMapMemberArray(const char *name, bool *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_BOOL ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	void Serializable::serializableMapMemberArray(const char *name, char *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_CHAR ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	void Serializable::serializableMapMemberArray(const char *name, wchar_t *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_WCHAR ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	void Serializable::serializableMapMemberArray(const char *name, int8_t *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_SINT8 ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	void Serializable::serializableMapMemberArray(const char *name, uint8_t *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_UINT8 ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	void Serializable::serializableMapMemberArray(const char *name, int16_t *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_SINT16 ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	void Serializable::serializableMapMemberArray(const char *name, uint16_t *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_UINT16 ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	void Serializable::serializableMapMemberArray(const char *name, int32_t *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_SINT32 ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	void Serializable::serializableMapMemberArray(const char *name, uint32_t *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_UINT32 ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	void Serializable::serializableMapMemberArray(const char *name, int64_t *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_SINT64 ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	void Serializable::serializableMapMemberArray(const char *name, uint64_t *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_UINT64 ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	void Serializable::serializableMapMemberArray(const char *name, float *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_FLOAT ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	void Serializable::serializableMapMemberArray(const char *name, double *object, int32_t arrlength) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_ARRAY | SerializableMemberInfo::PTYPE_DOUBLE ), SerializableMemberInfo::MTYPE_NATIVE | SerializableMemberInfo::MTYPE_NATIVEARRAY, (void*)object, arrlength)); }
-	
-	void Serializable::serializableMapMemberList(const char *name, std::list< std::basic_string<char> >& object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_LIST | SerializableMemberInfo::PTYPE_CHAR), (SerializableMemberInfo::MTYPE_STDLIST | SerializableMemberInfo::MTYPE_STDBASICSTRING), (void*)&object, 1)); }
-	void Serializable::serializableMapMemberList(const char *name, std::list< std::basic_string<wchar_t> >& object) { m_members.push_back(SerializableMemberInfo(name, (SerializableMemberInfo::PTYPE_LIST | SerializableMemberInfo::PTYPE_WCHAR), (SerializableMemberInfo::MTYPE_STDLIST | SerializableMemberInfo::MTYPE_STDBASICSTRING), (void*)&object, 1)); }
-
-	SerializableMemberInfo & Serializable::serializableMapMemberList(const char *name, std::list<Serializable*>& object) { m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_LIST | SerializableMemberInfo::PTYPE_SUBPAYLOAD, SerializableMemberInfo::MTYPE_STDLIST, (void*)&object, 1)); return *m_members.rbegin(); }
-#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
-	SerializableMemberInfo & Serializable::serializableMapMemberList(const char *name, std::list<JsCPPUtils::SmartPointer<Serializable> >& object) { m_members.push_back(SerializableMemberInfo(name, SerializableMemberInfo::PTYPE_LIST | SerializableMemberInfo::PTYPE_SUBPAYLOAD, SerializableMemberInfo::MTYPE_STDLIST | SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER, (void*)&object, 1)); return *m_members.rbegin(); }
-#endif
 }

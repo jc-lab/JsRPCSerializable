@@ -1,9 +1,33 @@
+/*
+* Licensed to the Apache Software Foundation (ASF) under one or more
+* contributor license agreements.  See the NOTICE file distributed with
+* this work for additional information regarding copyright ownership.
+* The ASF licenses this file to You under the Apache License, Version 2.0
+* (the "License"); you may not use this file except in compliance with
+* the License.  You may obtain a copy of the License at
+*
+*    http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+/**
+ * @file	JSONObjectMapper.cppp
+ * @author	Jichan (development@jc-lab.net / http://ablog.jc-lab.net/ )
+ * @date	2018/12/06
+ * @copyright Copyright (C) 2018 jichan.\n
+ *             This software may be modified and distributed under the terms
+ *            of the Apache License 2.0.  See the LICENSE file for details.
+ */
+ 
 #include "JSONObjectMapper.h"
 
 #if defined(HAS_RAPIDJSON) && HAS_RAPIDJSON
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
-#endif
 
 #if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
 #include <JsCPPUtils/StringBuffer.h>
@@ -11,975 +35,892 @@
 #endif
 
 namespace JsRPC {
-#if defined(HAS_RAPIDJSON) && HAS_RAPIDJSON
-
-	//template<typename T, class AllocatorT>
-	//static void _serializeStdBasicString(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, const std::basic_string<T> &text);
-	template<class AllocatorT>
-	static void _serializeStdBasicString(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, const std::basic_string<char> &text)
-	{
-		jsonValue.SetString(text.c_str(), text.length(), jsonAllocator);
+	template<typename T>
+	static T readFromPayload(const rapidjson::Value &jsonValue);
+	template<>
+	static bool readFromPayload<bool>(const rapidjson::Value &jsonValue) {
+		return jsonValue.GetBool();
 	}
-	template<class AllocatorT>
-	static void _serializeStdBasicString(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, const std::basic_string<wchar_t> &text)
-	{
+	template<>
+	static char readFromPayload<char>(const rapidjson::Value &jsonValue) {
+		const char *text = jsonValue.GetString();
+		return text[0];
+	}
+	template<>
+	static wchar_t readFromPayload<wchar_t>(const rapidjson::Value &jsonValue) {
 #if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
-		JsCPPUtils::StringBuffer<char> sbUtf8Text = JsCPPUtils::StringEncoding::StringToUTF8SB(text);
-		jsonValue.SetString(sbUtf8Text.c_str(), sbUtf8Text.length(), jsonAllocator);
-#else
-		assert(0);
+		std::basic_string<wchar_t> text = JsCPPUtils::StringEncoding::UTF8ToStringW(jsonValue.GetString(), jsonValue.GetStringLength());
+		if (text.length() > 0)
+		{
+			return text.at(0);
+		}
+#endif
+		return 0;
+	}
+	template<>
+	static int8_t readFromPayload<int8_t>(const rapidjson::Value &jsonValue) {
+		return jsonValue.GetInt();
+	}
+	template<>
+	static uint8_t readFromPayload<uint8_t>(const rapidjson::Value &jsonValue) {
+		return jsonValue.GetUint();
+	}
+	template<>
+	static int16_t readFromPayload<int16_t>(const rapidjson::Value &jsonValue) {
+		return jsonValue.GetInt();
+	}
+	template<>
+	static uint16_t readFromPayload<uint16_t>(const rapidjson::Value &jsonValue) {
+		return jsonValue.GetUint();
+	}
+	template<>
+	static int32_t readFromPayload<int32_t>(const rapidjson::Value &jsonValue) {
+		return jsonValue.GetInt();
+	}
+	template<>
+	static uint32_t readFromPayload<uint32_t>(const rapidjson::Value &jsonValue) {
+		return jsonValue.GetUint();
+	}
+	template<>
+	static int64_t readFromPayload<int64_t>(const rapidjson::Value &jsonValue) {
+		return jsonValue.GetInt64();
+	}
+	template<>
+	static uint64_t readFromPayload<uint64_t>(const rapidjson::Value &jsonValue) {
+		return jsonValue.GetUint64();
+	}
+	template<>
+	static float readFromPayload<float>(const rapidjson::Value &jsonValue) {
+		return jsonValue.GetFloat();
+	}
+	template<>
+	static double readFromPayload<double>(const rapidjson::Value &jsonValue) {
+		return jsonValue.GetDouble();
+	}
+
+	// Native Element
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const bool *data) {
+		jsonValue.SetBool(*data);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const char *data) {
+		jsonValue.SetString(data, 1, jsonAllocator);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const wchar_t *data) {
+#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
+		JsCPPUtils::StringBuffer<char> utf8Text = JsCPPUtils::StringEncoding::StringToUTF8SB(data, 1);
+		jsonValue.SetString(utf8Text.c_str(), utf8Text.length(), jsonAllocator);
 #endif
 	}
-
-	template<class AllocatorT>
-	static void _serializeSubPayload(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, Serializable *ptr)
-	{
-		if (ptr == NULL)
-		{
-			jsonValue.SetNull();
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const int8_t *data) {
+		jsonValue.SetInt(*data);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const uint8_t *data) {
+		jsonValue.SetUint(*data);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const int16_t *data) {
+		jsonValue.SetInt(*data);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const uint16_t *data) {
+		jsonValue.SetUint(*data);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const int32_t *data) {
+		jsonValue.SetInt(*data);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const uint32_t *data) {
+		jsonValue.SetUint(*data);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const int64_t *data) {
+		jsonValue.SetInt64(*data);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const uint64_t *data) {
+		jsonValue.SetUint64(*data);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const float *data) {
+		jsonValue.SetFloat(*data);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const double *data) {
+		jsonValue.SetDouble(*data);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const Serializable *data) {
+		if (data) {
+			rapidjson::Document jsonDoc;
+			JSONObjectMapper::serializeTo(data, jsonDoc);
+			jsonValue.CopyFrom(jsonDoc, jsonAllocator);
 		} else {
-			JSONObjectMapper::serializeTo(ptr, jsonValue, jsonAllocator);
-		}
-	}
-
-	template<typename T, class AllocatorT>
-	static void _serializeStdListSmartPointerStdBasicString(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, const void *ptr)
-	{
-		const std::list< JsCPPUtils::SmartPointer< std::basic_string<T> > > *plist = (const std::list< JsCPPUtils::SmartPointer< std::basic_string<T> > > *)ptr;
-		int32_t listSize = plist->size();
-		int32_t i;
-		jsonValue.SetArray();
-		for (std::list< JsCPPUtils::SmartPointer< std::basic_string<T> > >::const_iterator iter = plist->begin(); iter != plist->end(); iter++)
-		{
-			rapidjson::Value jsonElement;
-			_serializeStdBasicString(jsonElement, jsonAllocator, *(*iter));
-			jsonValue.PushBack(jsonElement, jsonAllocator);
-		}
-	}
-
-	template<class AllocatorT>
-	static void _serializeStdListSmartPointerSubPayload(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, const void *ptr)
-	{
-		const std::list< JsCPPUtils::SmartPointer< Serializable > > *plist = (const std::list< JsCPPUtils::SmartPointer< Serializable > > *)ptr;
-		int32_t listSize = plist->size();
-		int32_t i;
-		jsonValue.SetArray();
-		for (std::list< JsCPPUtils::SmartPointer< Serializable > >::const_iterator iter = plist->begin(); iter != plist->end(); iter++)
-		{
-			rapidjson::Value jsonElement;
-			_serializeSubPayload(jsonElement, jsonAllocator, iter->getPtr());
-			jsonValue.PushBack(jsonElement, jsonAllocator);
-		}
-	}
-
-	template<typename T, class AllocatorT>
-	static void _serializeStdListStdBasicString(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, const std::list< std::basic_string<T> > *plist)
-	{
-		int32_t listSize = plist->size();
-		int32_t i;
-		jsonValue.SetArray();
-		for (std::list< std::basic_string<T> >::const_iterator iter = plist->begin(); iter != plist->end(); iter++)
-		{
-			rapidjson::Value jsonElement;
-			_serializeStdBasicString(jsonElement, jsonAllocator, (*iter));
-			jsonValue.PushBack(jsonElement, jsonAllocator);
-		}
-	}
-
-	template<class AllocatorT>
-	static void _serializeStdListSubPayload(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, std::list< JsRPC::Serializable*> *plist)
-	{
-		jsonValue.SetArray();
-		for (std::list< JsRPC::Serializable*>::iterator iter = plist->begin(); iter != plist->end(); iter++)
-		{
-			rapidjson::Value jsonElement;
-			if (*iter == NULL)
-			{
-				jsonElement.SetNull();
-			} else {
-				JSONObjectMapper::serializeTo(*iter, jsonElement, jsonAllocator);
-			}
-			jsonValue.PushBack(jsonElement, jsonAllocator);
-		}
-	}
-
-	template<class AllocatorT>
-	static void _serializeStdList(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, const SerializableMemberInfo &memberInfo)
-	{
-		int32_t i;
-		int32_t listSize;
-		if (memberInfo.mtype & SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER)
-		{
-			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_CHAR:
-					_serializeStdListSmartPointerStdBasicString<char>(jsonValue, jsonAllocator, memberInfo.ptr);
-					return;
-				case SerializableMemberInfo::PTYPE_WCHAR:
-					_serializeStdListSmartPointerStdBasicString<wchar_t>(jsonValue, jsonAllocator, memberInfo.ptr);
-					return;
-				}
-			}
-			else
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_SUBPAYLOAD:
-					_serializeStdListSmartPointerSubPayload(jsonValue, jsonAllocator, memberInfo.ptr);
-					return;
-				}
-			}
-		}
-		else
-		{
-			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_CHAR:
-					_serializeStdListStdBasicString(jsonValue, jsonAllocator, (const std::list< std::basic_string<char> >*)memberInfo.ptr);
-					return;
-				case SerializableMemberInfo::PTYPE_WCHAR:
-					_serializeStdListStdBasicString(jsonValue, jsonAllocator, (const std::list< std::basic_string<wchar_t> >*)memberInfo.ptr);
-					return;
-				}
-			}
-			else
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_SUBPAYLOAD:
-					_serializeStdListSubPayload(jsonValue, jsonAllocator, (std::list< JsRPC::Serializable*> *)memberInfo.ptr);
-					return;
-				}
-			}
-		}
-		throw Serializable::UnavailableTypeException();
-	}
-
-	template<class AllocatorT>
-	static void _serializeStdVectorNativeBool(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, void *ptr)
-	{
-		const std::vector<bool> *pvector = (const std::vector<bool>*)ptr;
-		jsonValue.SetArray();
-		if (pvector->size())
-		{
-			for (std::vector<bool>::const_iterator iter = pvector->begin(); iter != pvector->end(); iter++)
-			{
-				rapidjson::Value jsonElement; jsonElement.SetBool(*iter);
-				jsonValue.PushBack(jsonElement, jsonAllocator);
-			}
+			jsonValue.SetNull();
 		}
 	}
 
 	template<typename T>
-	static void _jsonSetByType(rapidjson::Value &jsonValue, char value) {
-		jsonValue.SetInt(value);
+	static void readElementFromPayload(const rapidjson::Value &jsonValue, T *data) {
+		*data = readFromPayload<T>(jsonValue);
 	}
-	static void _jsonSetByType(rapidjson::Value &jsonValue, wchar_t value) {
-		jsonValue.SetInt(value);
-	}
-	static void _jsonSetByType(rapidjson::Value &jsonValue, int8_t value) {
-		jsonValue.SetInt(value);
-	}
-	static void _jsonSetByType(rapidjson::Value &jsonValue, uint8_t value) {
-		jsonValue.SetUint(value);
-	}
-	static void _jsonSetByType(rapidjson::Value &jsonValue, int16_t value) {
-		jsonValue.SetInt(value);
-	}
-	static void _jsonSetByType(rapidjson::Value &jsonValue, uint16_t value) {
-		jsonValue.SetUint(value);
-	}
-	static void _jsonSetByType(rapidjson::Value &jsonValue, int32_t value) {
-		jsonValue.SetInt(value);
-	}
-	static void _jsonSetByType(rapidjson::Value &jsonValue, uint32_t value) {
-		jsonValue.SetUint(value);
-	}
-	static void _jsonSetByType(rapidjson::Value &jsonValue, int64_t value) {
-		jsonValue.SetInt64(value);
-	}
-	static void _jsonSetByType(rapidjson::Value &jsonValue, uint64_t value) {
-		jsonValue.SetUint64(value);
-	}
-	static void _jsonSetByType(rapidjson::Value &jsonValue, float value) {
-		jsonValue.SetFloat(value);
-	}
-	static void _jsonSetByType(rapidjson::Value &jsonValue, double value) {
-		jsonValue.SetDouble(value);
+	template<>
+	static void readElementFromPayload<Serializable>(const rapidjson::Value &jsonValue, Serializable *data) {
+		JSONObjectMapper::deserializeJsonObject(data, jsonValue);
 	}
 
-	template<typename T, class AllocatorT>
-	static void _serializeStdVectorNative(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, void *ptr)
+	template <typename T, typename JsonAllocatorT>
+	static void writeElementArrayToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const T* data, size_t length)
 	{
-		const std::vector<T> *pvector = (const std::vector<T>*)ptr;
+		size_t i;
 		jsonValue.SetArray();
-		if (pvector->size())
+		for (i = 0; i < length; i++) {
+			rapidjson::Value jsonElement;
+			writeElementToPayload(jsonElement, jsonAllocator, &data[i]);
+			jsonValue.PushBack(jsonElement, jsonAllocator);
+		}
+	}
+
+	template <typename T>
+	static void readElementArrayFromPayload(const rapidjson::Value &jsonValue, T* data, size_t length)
+	{
+		size_t i = 0;
+		if (!jsonValue.IsArray())
+			throw Serializable::Serializable::ParseException();
+		if (jsonValue.Size() != length)
+			throw Serializable::Serializable::ParseException();
+		for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
 		{
-			for (std::vector<T>::const_iterator iter = pvector->begin(); iter != pvector->end(); iter++)
+			readElementFromPayload(*iter, &data[i++]);
+		}
+	}
+
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const std::basic_string<char> *data) {
+		jsonValue.SetString(data->c_str(), data->length(), jsonAllocator);
+	}
+	template <typename JsonAllocatorT>
+	static void writeElementToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const std::basic_string<wchar_t> *data) {
+#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
+		JsCPPUtils::StringBuffer<char> sbUtf8Text = JsCPPUtils::StringEncoding::StringToUTF8SB(*data);
+		jsonValue.SetString(sbUtf8Text.c_str(), sbUtf8Text.length(), jsonAllocator);
+#endif
+	}
+	static void readElementFromPayload(const rapidjson::Value &jsonValue, std::basic_string<char> *data)
+	{
+		if(!jsonValue.IsString())
+			throw Serializable::Serializable::ParseException();
+		*data = std::basic_string<char>(jsonValue.GetString(), jsonValue.GetStringLength());
+	}
+	static void readElementFromPayload(const rapidjson::Value &jsonValue, std::basic_string<wchar_t> *data)
+	{
+		if (!jsonValue.IsString())
+			throw Serializable::Serializable::ParseException();
+#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
+		*data = JsCPPUtils::StringEncoding::UTF8ToStringW(jsonValue.GetString(), jsonValue.GetStringLength());
+#endif
+	}
+	template <typename T, typename JsonAllocatorT>
+	static void writeStdVectorToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const std::vector<T> *data) {
+		jsonValue.SetArray();
+		for (std::vector<T>::const_iterator iter = data->begin(); iter != data->end(); iter++)
+		{
+			rapidjson::Value jsonElement;
+			T value = *iter;
+			writeElementToPayload(jsonElement, jsonAllocator, &value);
+			jsonValue.PushBack(jsonElement, jsonAllocator);
+		}
+	}
+	template <typename T>
+	static void readStdVectorFromPayload(const rapidjson::Value &jsonValue, std::vector<T> *data) {
+		if(!jsonValue.IsArray())
+			throw Serializable::Serializable::ParseException();
+		data->clear();
+		for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
+		{
+			T value;
+			readElementFromPayload(*iter, &value);
+			data->push_back(value);
+		}
+	}
+
+	template <class T, typename JsonAllocatorT>
+	static void writeStdListToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const std::list<T> *data);
+	template <typename JsonAllocatorT>
+	static void writeStdListToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const std::list< std::basic_string<char> > *data)
+	{
+		jsonValue.SetArray();
+		for (std::list< std::basic_string<char> >::const_iterator iter = data->begin(); iter != data->end(); iter++)
+		{
+			rapidjson::Value jsonElement;
+			jsonElement.SetString(iter->c_str(), iter->length(), jsonAllocator);
+			jsonValue.PushBack(jsonElement, jsonAllocator);
+		}
+	}
+	template <typename JsonAllocatorT>
+	static void writeStdListToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const std::list< std::basic_string<wchar_t> > *data)
+	{
+		jsonValue.SetArray();
+		for (std::list< std::basic_string<wchar_t> >::const_iterator iter = data->begin(); iter != data->end(); iter++)
+		{
+			rapidjson::Value jsonElement;
+			JsCPPUtils::StringBuffer<char> sbUtf8Text = JsCPPUtils::StringEncoding::StringToUTF8SB(*iter);
+			jsonElement.SetString(sbUtf8Text.c_str(), sbUtf8Text.length(), jsonAllocator);
+			jsonValue.PushBack(jsonElement, jsonAllocator);
+		}
+	}
+	template <typename T, typename JsonAllocatorT>
+	static void writeStdListToPayload(rapidjson::Value &jsonValue, JsonAllocatorT &jsonAllocator, const std::list< std::vector<T> > *data)
+	{
+		jsonValue.SetArray();
+		for (std::list< std::vector< T > >::const_iterator iter = data->begin(); iter != data->end(); iter++)
+		{
+			rapidjson::Value jsonElement;
+			for (std::vector< T >::const_iterator subiter = iter->begin(); subiter != iter->end(); subiter++)
 			{
-				rapidjson::Value jsonElement;
-				_jsonSetByType(jsonElement, *iter);
-				jsonValue.PushBack(jsonElement, jsonAllocator);
+				rapidjson::Value jsonSubElement;
+				T value = *subiter;
+				writeElementToPayload(jsonSubElement, jsonAllocator, &value);
+				jsonElement.PushBack(jsonSubElement, jsonAllocator);
 			}
-		}
-	}
-
-	template<class AllocatorT>
-	static void _serializeStdVector(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, const SerializableMemberInfo &memberInfo)
-	{
-		switch (memberInfo.ptype & 0xFFF)
-		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			_serializeStdVectorNativeBool(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-			_serializeStdVectorNative<int8_t>(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT8:
-			_serializeStdVectorNative<uint8_t>(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT16:
-			_serializeStdVectorNative<int16_t>(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT16:
-			_serializeStdVectorNative<uint16_t>(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT32:
-			_serializeStdVectorNative<int32_t>(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT32:
-			_serializeStdVectorNative<uint32_t>(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT64:
-			_serializeStdVectorNative<int64_t>(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT64:
-			_serializeStdVectorNative<uint64_t>(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_FLOAT:
-			_serializeStdVectorNative<float>(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-			_serializeStdVectorNative<double>(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_CHAR:
-			_serializeStdVectorNative<char>(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			_serializeStdVectorNative<wchar_t>(jsonValue, jsonAllocator, memberInfo.ptr);
-			return;
-		}
-		throw Serializable::UnavailableTypeException();
-	}
-
-	template<class AllocatorT>
-	static void _serializeNativeArrayBool(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, const SerializableMemberInfo &memberInfo)
-	{
-		int32_t i;
-		const bool *pdata = (const bool*)memberInfo.ptr;
-		jsonValue.SetArray();
-		for (i = 0; i < memberInfo.length; i++)
-		{
-			rapidjson::Value jsonElement;
-			jsonElement.SetBool(pdata[i] ? true : false);
 			jsonValue.PushBack(jsonElement, jsonAllocator);
 		}
 	}
 
-	template<typename T, class AllocatorT>
-	static void _serializeNativeArrayT(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, const SerializableMemberInfo &memberInfo)
+	template <class T>
+	static void readStdListFromPayload(const rapidjson::Value &jsonValue, std::list<T> *data);
+	template <typename T>
+	static void readStdListFromPayload(const rapidjson::Value &jsonValue, std::list< std::basic_string<T> > *data)
 	{
-		int32_t i;
-		const T *pdata = (const T*)memberInfo.ptr;
-		jsonValue.SetArray();
-		for (i = 0; i < memberInfo.length; i++)
+		data->clear();
+		for(rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
 		{
-			rapidjson::Value jsonElement;
-			_jsonSetByType(jsonElement, pdata[i]);
-			jsonValue.PushBack(jsonElement, jsonAllocator);
+			std::basic_string<T> element;
+			readElementFromPayload(*iter, &element);
+			data->push_back(element);
+		}
+	}
+	template <typename T>
+	static void readStdListFromPayload(const rapidjson::Value &jsonValue, std::list< std::vector<T> > *data)
+	{
+		data->clear();
+		for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
+		{
+			std::vector<T> element;
+			readStdVectorFromPayload(*iter, &element);
+			data->push_back(element);
 		}
 	}
 
-	template<class AllocatorT>
-	static void _serializeNativeArray(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, const SerializableMemberInfo &memberInfo)
+	static void _serializeCheckNotEoo(uint16_t *tempEtype, std::list<internal::SerializableMemberInfo::EncapType>::const_iterator *iterEncap, std::list<internal::SerializableMemberInfo::EncapType>::const_iterator endOfEncap)
 	{
-		switch (memberInfo.ptype & 0xFFF)
-		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			_serializeNativeArrayBool(jsonValue, jsonAllocator, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-			_serializeNativeArrayT<int8_t>(jsonValue, jsonAllocator, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT8:
-			_serializeNativeArrayT<uint8_t>(jsonValue, jsonAllocator, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT16:
-			_serializeNativeArrayT<int16_t>(jsonValue, jsonAllocator, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT16:
-			_serializeNativeArrayT<uint16_t>(jsonValue, jsonAllocator, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT32:
-			_serializeNativeArrayT<int32_t>(jsonValue, jsonAllocator, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT32:
-			_serializeNativeArrayT<uint32_t>(jsonValue, jsonAllocator, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT64:
-			_serializeNativeArrayT<int64_t>(jsonValue, jsonAllocator, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT64:
-			_serializeNativeArrayT<uint64_t>(jsonValue, jsonAllocator, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_FLOAT:
-			_serializeNativeArrayT<float>(jsonValue, jsonAllocator, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-			_serializeNativeArrayT<double>(jsonValue, jsonAllocator, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_CHAR:
-			_serializeNativeArrayT<char>(jsonValue, jsonAllocator, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			_serializeNativeArrayT<wchar_t>(jsonValue, jsonAllocator, memberInfo);
-			return;
-		}
-		throw Serializable::UnavailableTypeException();
+		if ((*iterEncap) == endOfEncap)
+			throw Serializable::Serializable::UnavailableTypeException();
+		*tempEtype = *((*iterEncap)++);
 	}
 
-	template<class AllocatorT>
-	static void _serializeNativeObject(rapidjson::Value &jsonValue, AllocatorT &jsonAllocator, const SerializableMemberInfo &memberInfo)
+	static void _serializeCheckEoo(uint16_t *tempEtype, std::list<internal::SerializableMemberInfo::EncapType>::const_iterator *iterEncap, std::list<internal::SerializableMemberInfo::EncapType>::const_iterator endOfEncap)
 	{
-		switch (memberInfo.ptype & 0xFFF)
-		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			_jsonSetByType<bool>(jsonValue, *((bool*)memberInfo.ptr));
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-			_jsonSetByType<int8_t>(jsonValue, *((int8_t*)memberInfo.ptr));
-		case SerializableMemberInfo::PTYPE_UINT8:
-			_jsonSetByType<uint8_t>(jsonValue, *((uint8_t*)memberInfo.ptr));
-		case SerializableMemberInfo::PTYPE_SINT16:
-			_jsonSetByType<int16_t>(jsonValue, *((int16_t*)memberInfo.ptr));
-		case SerializableMemberInfo::PTYPE_UINT16:
-			_jsonSetByType<uint16_t>(jsonValue, *((uint16_t*)memberInfo.ptr));
-		case SerializableMemberInfo::PTYPE_SINT32:
-			_jsonSetByType<int32_t>(jsonValue, *((int32_t*)memberInfo.ptr));
-		case SerializableMemberInfo::PTYPE_UINT32:
-			_jsonSetByType<uint32_t>(jsonValue, *((uint32_t*)memberInfo.ptr));
-		case SerializableMemberInfo::PTYPE_SINT64:
-			_jsonSetByType<int64_t>(jsonValue, *((int64_t*)memberInfo.ptr));
-		case SerializableMemberInfo::PTYPE_UINT64:
-			_jsonSetByType<uint64_t>(jsonValue, *((uint64_t*)memberInfo.ptr));
-		case SerializableMemberInfo::PTYPE_FLOAT:
-			_jsonSetByType<float>(jsonValue, *((float*)memberInfo.ptr));
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-			_jsonSetByType<double>(jsonValue, *((double*)memberInfo.ptr));
-		case SerializableMemberInfo::PTYPE_CHAR:
-			_jsonSetByType<char>(jsonValue, *((char*)memberInfo.ptr));
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			_jsonSetByType<wchar_t>(jsonValue, *((wchar_t*)memberInfo.ptr));
-			return;
-		}
-		throw Serializable::UnavailableTypeException();
+		*tempEtype = *((*iterEncap)++);
+		if ((*iterEncap) != endOfEncap)
+			throw Serializable::Serializable::UnavailableTypeException();
 	}
 
-	void JSONObjectMapper::serializeTo(Serializable *serialiable, rapidjson::Document &jsonDoc)
+	void JSONObjectMapper::serializeTo(const Serializable *serialiable, rapidjson::Document &jsonDoc)
 	{
 		rapidjson::Document::AllocatorType &jsonAllocator = jsonDoc.GetAllocator();
-		size_t pos = 0;
 
-		const std::list<SerializableMemberInfo> &members = serialiable->serializableMembers();
+		const std::list<internal::STypeCommon*> &members = serialiable->serializableMembers();
 
 		jsonDoc.SetObject();
 
 		// Data
-		for (std::list<SerializableMemberInfo>::const_iterator iter = members.begin(); iter != members.end(); iter++)
+		for (std::list<internal::STypeCommon*>::const_iterator iterMem = members.begin(); iterMem != members.end(); iterMem++)
 		{
-			rapidjson::Value jsonKey;
+			std::list<internal::SerializableMemberInfo::EncapType>::const_iterator iterEncap = (*iterMem)->_memberInfo.encaps.begin();
+			std::list<internal::SerializableMemberInfo::EncapType>::const_iterator endOfEncap = (*iterMem)->_memberInfo.encaps.end();
+			uint16_t tempEtype;
+			rapidjson::Value jsonName;
 			rapidjson::Value jsonValue;
-			int i;
-			uint32_t size = 0;
-			int32_t listLength = 1;
-
-			jsonKey.SetString(iter->name.c_str(), iter->name.length(), jsonAllocator);
-
-
-			if (iter->ptype & SerializableMemberInfo::PTYPE_LIST)
+			jsonName.SetString((*iterMem)->_memberInfo.name.c_str(), (*iterMem)->_memberInfo.name.length(), jsonAllocator);
+			_serializeCheckNotEoo(&tempEtype, &iterEncap, endOfEncap);
+			if ((*iterMem)->isNull())
 			{
-				// List
-				if (iter->mtype & SerializableMemberInfo::MTYPE_STDLIST)
-				{
-					_serializeStdList(jsonValue, jsonAllocator, *iter);
-				}
+				jsonValue.SetNull();
 			}
-			else if (iter->ptype & SerializableMemberInfo::PTYPE_ARRAY)
-			{
-				// Single object
-				if (iter->mtype & SerializableMemberInfo::MTYPE_STDVECTOR)
+			else {
+				if ((tempEtype & 0xFF00) == internal::SerializableMemberInfo::EncapType::ETYPE_NATIVE)
 				{
-					_serializeStdVector(jsonValue, jsonAllocator, *iter);
-				}
-				else if (iter->mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-				{
-					switch (iter->ptype & 0xFFF)
+					switch (tempEtype & 0x00FF)
 					{
-					case SerializableMemberInfo::PTYPE_CHAR:
-						_serializeStdBasicString(jsonValue, jsonAllocator, *(std::basic_string<char>*)iter->ptr);
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_BOOL):
+						writeElementToPayload(jsonValue, jsonAllocator, (const bool*)((*iterMem)->_memberInfo.ptr));
 						break;
-					case SerializableMemberInfo::PTYPE_WCHAR:
-						_serializeStdBasicString(jsonValue, jsonAllocator, *(std::basic_string<wchar_t>*)iter->ptr);
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+						writeElementToPayload(jsonValue, jsonAllocator, (const int8_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+						writeElementToPayload(jsonValue, jsonAllocator, (const uint8_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+						writeElementToPayload(jsonValue, jsonAllocator, (const int16_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+						writeElementToPayload(jsonValue, jsonAllocator, (const uint16_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+						writeElementToPayload(jsonValue, jsonAllocator, (const int32_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+						writeElementToPayload(jsonValue, jsonAllocator, (const uint32_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+						writeElementToPayload(jsonValue, jsonAllocator, (const int64_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+						writeElementToPayload(jsonValue, jsonAllocator, (const uint64_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+						writeElementToPayload(jsonValue, jsonAllocator, (const char*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+						writeElementToPayload(jsonValue, jsonAllocator, (const wchar_t*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_FLOAT):
+						writeElementToPayload(jsonValue, jsonAllocator, (const float*)((*iterMem)->_memberInfo.ptr));
+						break;
+					case (internal::SerializableMemberInfo::EncapType::ETYPE_DOUBLE):
+						writeElementToPayload(jsonValue, jsonAllocator, (const double*)((*iterMem)->_memberInfo.ptr));
 						break;
 					default:
 						throw Serializable::UnavailableTypeException();
 					}
-				} else {
-					_serializeNativeArray(jsonValue, jsonAllocator, *iter);
-				}
-			}
-			else if (iter->ptype & SerializableMemberInfo::PTYPE_SUBPAYLOAD)
-			{
-				if (iter->mtype & SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER)
-				{
-					JsCPPUtils::SmartPointer<Serializable> *pspobj = (JsCPPUtils::SmartPointer<Serializable> *)iter->ptr;
-					_serializeSubPayload(jsonValue, jsonAllocator, pspobj->getPtr());
-				} else {
-					_serializeSubPayload(jsonValue, jsonAllocator, (Serializable*)iter->ptr);
-				}
-			}
-			else
-			{
-				// Just object
-				_serializeNativeObject(jsonValue, jsonAllocator, *iter);
-			}
-
-			jsonDoc.AddMember(jsonKey, jsonValue, jsonAllocator);
-		}
-	}
-
-	/************************* Deserialize *************************/
-	static void _deserializeStdBasicString(std::basic_string<char> *ptext, const rapidjson::Value &jsonValue)
-	{
-		if (jsonValue.IsNull())
-			ptext->clear();
-		else
-			*ptext = std::basic_string<char>(jsonValue.GetString(), jsonValue.GetStringLength());
-	}
-	static void _deserializeStdBasicString(std::basic_string<wchar_t> *ptext, const rapidjson::Value &jsonValue)
-	{
-		if (jsonValue.IsNull())
-			ptext->clear();
-		else
-#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
-			*ptext = JsCPPUtils::StringEncoding::UTF8ToString(jsonValue.GetString(), jsonValue.GetStringLength());
-#else
-			assert(0);
-#endif
-	}
-
-	template<typename T>
-	static void _deserializeStdListSmartPointerStdBasicString(const rapidjson::Value &jsonValue, const SerializableMemberInfo &memberInfo);
-
-	template<>
-	static void _deserializeStdListSmartPointerStdBasicString<char>(const rapidjson::Value &jsonValue, const SerializableMemberInfo &memberInfo)
-	{
-		std::list< JsCPPUtils::SmartPointer< std::basic_string<char> > > *plist = (std::list< JsCPPUtils::SmartPointer< std::basic_string<char> > > *)memberInfo.ptr;
-		plist->clear();
-		if (!jsonValue.IsNull())
-		{
-			for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
-			{
-				if (!iter->IsString())
-				{
-					throw JSONObjectMapper::TypeNotMatchException();
-				}
-				JsCPPUtils::SmartPointer< std::basic_string<char> > sptext = new std::basic_string<char>(jsonValue.GetString(), jsonValue.GetStringLength());
-				plist->push_back(sptext);
-			}
-		}
-	}
-
-	template<>
-	static void _deserializeStdListSmartPointerStdBasicString<wchar_t>(const rapidjson::Value &jsonValue, const SerializableMemberInfo &memberInfo)
-	{
-		std::list< JsCPPUtils::SmartPointer< std::basic_string<wchar_t> > > *plist = (std::list< JsCPPUtils::SmartPointer< std::basic_string<wchar_t> > > *)memberInfo.ptr;
-		plist->clear();
-		if (!jsonValue.IsNull())
-		{
-			for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
-			{
-				if (iter->IsNull()) {
-					plist->push_back(NULL);
-				}else if (!iter->IsString())
-				{
-					throw JSONObjectMapper::TypeNotMatchException();
 				}
 				else {
-#if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
-					std::basic_string<wchar_t> text = JsCPPUtils::StringEncoding::UTF8ToStringW(jsonValue.GetString(), jsonValue.GetStringLength());
-					JsCPPUtils::SmartPointer< std::basic_string<wchar_t> > sptext = new std::basic_string<wchar_t>(text);
-					plist->push_back(sptext);
-#else
-					assert(0);
-#endif
-				}
-			}
-		}
-	}
-
-	static Serializable *_deserializeSubPayloadToCreate(const SerializableMemberInfo &memberInfo, const rapidjson::Value &jsonValue)
-	{
-		Serializable *serializable = memberInfo.createFactory->create();
-		JSONObjectMapper::deserializeJsonObject(serializable, jsonValue);
-		return serializable;
-	}
-
-	static void _deserializeStdListSmartPointerSubPayload(const SerializableMemberInfo &memberInfo, const rapidjson::Value &jsonValue)
-	{
-		std::list< JsCPPUtils::SmartPointer< Serializable > > *plist = (std::list< JsCPPUtils::SmartPointer< Serializable > > *)memberInfo.ptr;
-		plist->clear();
-		for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
-		{
-			plist->push_back(_deserializeSubPayloadToCreate(memberInfo, *iter));
-		}
-	}
-
-	template<typename T>
-	static void _deserializeStdListStdBasicString(const SerializableMemberInfo &memberInfo, const rapidjson::Value &jsonValue)
-	{
-		std::list< std::basic_string<T> > *plist = (std::list< std::basic_string<T> >*)memberInfo.ptr;
-		int32_t listSize = plist->size();
-		int32_t i;
-		for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
-		{
-			std::basic_string<T> text;
-			_deserializeStdBasicString(&text, *iter);
-			plist->push_back(text);
-		}
-	}
-
-	static void _deserializeStdListSubPayload(const SerializableMemberInfo &memberInfo, const rapidjson::Value &jsonValue)
-	{
-		std::list< JsRPC::Serializable*> *plist = (std::list< JsRPC::Serializable*>*)memberInfo.ptr;
-		for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
-		{
-			plist->push_back(_deserializeSubPayloadToCreate(memberInfo, jsonValue));
-		}
-	}
-
-	void _deserializeStdList(const SerializableMemberInfo &memberInfo, const rapidjson::Value &jsonValue)
-	{
-		int32_t i;
-		int32_t listSize;
-		if (memberInfo.mtype & SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER)
-		{
-			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_CHAR:
-					_deserializeStdListSmartPointerStdBasicString<char>(jsonValue, memberInfo);
-					return;
-				case SerializableMemberInfo::PTYPE_WCHAR:
-					_deserializeStdListSmartPointerStdBasicString<wchar_t>(jsonValue, memberInfo);
-					return;
-				}
-			}
-			else
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_SUBPAYLOAD:
-					_deserializeStdListSmartPointerSubPayload(memberInfo, jsonValue);
-					return;
-				}
-			}
-		}
-		else
-		{
-			if (memberInfo.mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_CHAR:
-					_deserializeStdListStdBasicString<char>(memberInfo, jsonValue);
-					return;
-				case SerializableMemberInfo::PTYPE_WCHAR:
-					_deserializeStdListStdBasicString<wchar_t>(memberInfo, jsonValue);
-					return;
-				}
-			}
-			else
-			{
-				switch (memberInfo.ptype & 0xFFF)
-				{
-				case SerializableMemberInfo::PTYPE_SUBPAYLOAD:
-					_deserializeStdListSubPayload(memberInfo, jsonValue);
-					return;
-				}
-			}
-		}
-		throw Serializable::UnavailableTypeException();
-	}
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	static void _deserializeStdVectorNativeBool(const rapidjson::Value &jsonValue, void *ptr)
-	{
-		std::vector<bool> *pvector = (std::vector<bool>*)ptr;
-		pvector->clear();
-		if (!jsonValue.IsNull()) {
-			if (!jsonValue.IsArray())
-				throw JSONObjectMapper::TypeNotMatchException();
-			for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
-			{
-				if (!iter->IsBool())
-					throw JSONObjectMapper::TypeNotMatchException();
-				pvector->push_back(iter->GetBool());
-			}
-		}
-	}
-
-	template<typename T>
-	static T _jsonGetByType(const rapidjson::Value &jsonValue);
-
-	template<>
-	static bool _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsBool())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetBool();
-	}
-	template<>
-	static char _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsInt())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetInt();
-	}
-	template<>
-	static wchar_t _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsInt())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetInt();
-	}
-	template<>
-	static int8_t _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsInt())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetInt();
-	}
-	template<>
-	static uint8_t _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsUint())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetUint();
-	}
-	template<>
-	static int16_t _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsInt())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetInt();
-	}
-	template<>
-	static uint16_t _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsUint())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetUint();
-	}
-	template<>
-	static int32_t _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsInt())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetInt();
-	}
-	template<>
-	static uint32_t _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsUint())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetUint();
-	}
-	template<>
-	static int64_t _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsInt64())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetInt64();
-	}
-	template<>
-	static uint64_t _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsUint64())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetUint64();
-	}
-	template<>
-	static float _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsFloat())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetFloat();
-	}
-	template<>
-	static double _jsonGetByType(const rapidjson::Value &jsonValue) {
-		if (!jsonValue.IsDouble())
-			throw JSONObjectMapper::TypeNotMatchException();
-		return jsonValue.GetDouble();
-	}
-
-	template<typename T>
-	static void _deserializeStdVectorNative(const rapidjson::Value &jsonValue, void *ptr)
-	{
-		std::vector<T> *pvector = (std::vector<T>*)ptr;
-		pvector->clear();
-		if (!jsonValue.IsNull()) {
-			if (!jsonValue.IsArray())
-				throw JSONObjectMapper::TypeNotMatchException();
-			for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
-			{
-				pvector->push_back(_jsonGetByType<T>(*iter));
-			}
-		}
-	}
-
-	static void _deserializeStdVector(const SerializableMemberInfo &memberInfo, const rapidjson::Value &jsonValue)
-	{
-		switch (memberInfo.ptype & 0xFFF)
-		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			_deserializeStdVectorNativeBool(jsonValue, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-			_deserializeStdVectorNative<int8_t>(jsonValue, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT8:
-			_deserializeStdVectorNative<uint8_t>(jsonValue, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT16:
-			_deserializeStdVectorNative<int16_t>(jsonValue, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT16:
-			_deserializeStdVectorNative<uint16_t>(jsonValue, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT32:
-			_deserializeStdVectorNative<int32_t>(jsonValue, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT32:
-			_deserializeStdVectorNative<uint32_t>(jsonValue, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT64:
-			_deserializeStdVectorNative<int64_t>(jsonValue, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT64:
-			_deserializeStdVectorNative<uint64_t>(jsonValue, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_FLOAT:
-			_deserializeStdVectorNative<float>(jsonValue, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-			_deserializeStdVectorNative<double>(jsonValue, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_CHAR:
-			_deserializeStdVectorNative<char>(jsonValue, memberInfo.ptr);
-			return;
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			_deserializeStdVectorNative<wchar_t>(jsonValue, memberInfo.ptr);
-			return;
-		}
-		throw Serializable::UnavailableTypeException();
-	}
-
-	template<typename T>
-	static void _deserializeNativeArrayT(const rapidjson::Value &jsonValue, const SerializableMemberInfo &memberInfo)
-	{
-		int32_t i = 0;
-		T *pdata = (T*)memberInfo.ptr;
-		if (!jsonValue.IsArray())
-			throw JSONObjectMapper::TypeNotMatchException();
-
-		if (memberInfo.length > jsonValue.Size())
-			throw JSONObjectMapper::DataOverrflowException();
-
-		for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++, i++)
-		{
-			pdata[i] = _jsonGetByType<bool>(*iter);
-		}
-	}
-
-	static void _deserializeNativeArray(const rapidjson::Value &jsonValue, const SerializableMemberInfo &memberInfo)
-	{
-		switch (memberInfo.ptype & 0xFFF)
-		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			_deserializeNativeArrayT<bool>(jsonValue, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-			_deserializeNativeArrayT<int8_t>(jsonValue, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT8:
-			_deserializeNativeArrayT<uint8_t>(jsonValue, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT16:
-			_deserializeNativeArrayT<int16_t>(jsonValue, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT16:
-			_deserializeNativeArrayT<uint16_t>(jsonValue, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT32:
-			_deserializeNativeArrayT<int32_t>(jsonValue, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT32:
-			_deserializeNativeArrayT<uint32_t>(jsonValue, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT64:
-			_deserializeNativeArrayT<int64_t>(jsonValue, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT64:
-			_deserializeNativeArrayT<uint64_t>(jsonValue, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_FLOAT:
-			_deserializeNativeArrayT<float>(jsonValue, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-			_deserializeNativeArrayT<double>(jsonValue, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_CHAR:
-			_deserializeNativeArrayT<char>(jsonValue, memberInfo);
-			return;
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			_deserializeNativeArrayT<wchar_t>(jsonValue, memberInfo);
-			return;
-		}
-		throw Serializable::UnavailableTypeException();
-	}
-
-	static void _deserializeNativeObject(const rapidjson::Value &jsonValue, const SerializableMemberInfo &memberInfo)
-	{
-		switch (memberInfo.ptype & 0xFFF)
-		{
-		case SerializableMemberInfo::PTYPE_BOOL:
-			*((bool*)memberInfo.ptr) = _jsonGetByType<bool>(jsonValue);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT8:
-			*((int8_t*)memberInfo.ptr) = _jsonGetByType<int8_t>(jsonValue);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT8:
-			*((uint8_t*)memberInfo.ptr) = _jsonGetByType<uint8_t>(jsonValue);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT16:
-			*((int16_t*)memberInfo.ptr) = _jsonGetByType<int16_t>(jsonValue);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT16:
-			*((uint16_t*)memberInfo.ptr) = _jsonGetByType<uint16_t>(jsonValue);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT32:
-			*((int32_t*)memberInfo.ptr) = _jsonGetByType<int32_t>(jsonValue);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT32:
-			*((uint32_t*)memberInfo.ptr) = _jsonGetByType<uint32_t>(jsonValue);
-			return;
-		case SerializableMemberInfo::PTYPE_SINT64:
-			*((int64_t*)memberInfo.ptr) = _jsonGetByType<int64_t>(jsonValue);
-			return;
-		case SerializableMemberInfo::PTYPE_UINT64:
-			*((uint64_t*)memberInfo.ptr) = _jsonGetByType<uint64_t>(jsonValue);
-			return;
-		case SerializableMemberInfo::PTYPE_FLOAT:
-			*((float*)memberInfo.ptr) = _jsonGetByType<float>(jsonValue);
-			return;
-		case SerializableMemberInfo::PTYPE_DOUBLE:
-			*((double*)memberInfo.ptr) = _jsonGetByType<double>(jsonValue);
-			return;
-		case SerializableMemberInfo::PTYPE_CHAR:
-			*((char*)memberInfo.ptr) = _jsonGetByType<char>(jsonValue);
-			return;
-		case SerializableMemberInfo::PTYPE_WCHAR:
-			*((wchar_t*)memberInfo.ptr) = _jsonGetByType<wchar_t>(jsonValue);
-			return;
-		}
-		throw Serializable::UnavailableTypeException();
-	}
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	void JSONObjectMapper::deserializeJsonObject(Serializable *serialiable, const rapidjson::Value &jsonObject)
-	{
-		size_t pos = 0;
-
-		const std::list<SerializableMemberInfo> &members = serialiable->serializableMembers();
-
-		if (!jsonObject.IsObject())
-		{
-			throw TypeNotMatchException();
-		}
-
-		// Data
-		for (std::list<SerializableMemberInfo>::const_iterator iter = members.begin(); iter != members.end(); iter++)
-		{
-			if (jsonObject.HasMember(iter->name.c_str()))
-			{
-				const rapidjson::Value &jsonMember = jsonObject[iter->name.c_str()];
-
-				if (iter->ptype & SerializableMemberInfo::PTYPE_LIST)
-				{
-					// List
-					if (!jsonMember.IsArray())
+					switch (tempEtype)
 					{
-						throw TypeNotMatchException();
-					}
-					if (iter->mtype & SerializableMemberInfo::MTYPE_STDLIST)
-					{
-						_deserializeStdList(*iter, jsonMember);
-					}
-				}
-				else if (iter->ptype & SerializableMemberInfo::PTYPE_ARRAY)
-				{
-					// Single object
-					if (iter->mtype & SerializableMemberInfo::MTYPE_STDVECTOR)
-					{
-						_deserializeStdVector(*iter, jsonMember);
-					}
-					else if (iter->mtype & SerializableMemberInfo::MTYPE_STDBASICSTRING)
-					{
-						switch (iter->ptype & 0xFFF)
+					case internal::SerializableMemberInfo::EncapType::ETYPE_STDBASICSTRING:
+						_serializeCheckNotEoo(&tempEtype, &iterEncap, endOfEncap);
+						writeElementToPayload(jsonValue, jsonAllocator, &tempEtype);
+						if (iterEncap != endOfEncap)
+							throw Serializable::UnavailableTypeException();
+						if (checkFlagsAll(tempEtype, internal::SerializableMemberInfo::EncapType::ETYPE_CHAR))
+							writeElementToPayload(jsonValue, jsonAllocator, (const std::basic_string<char>*)(*iterMem)->_memberInfo.ptr);
+						else if (checkFlagsAll(tempEtype, internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR))
+							writeElementToPayload(jsonValue, jsonAllocator, (const std::basic_string<wchar_t>*)(*iterMem)->_memberInfo.ptr);
+						else
+							throw Serializable::UnavailableTypeException();
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_STDVECTOR:
+						_serializeCheckNotEoo(&tempEtype, &iterEncap, endOfEncap);
+						writeElementToPayload(jsonValue, jsonAllocator, &tempEtype);
+						if (iterEncap != endOfEncap)
+							throw Serializable::UnavailableTypeException();
+						switch (tempEtype & 0x00FF)
 						{
-						case SerializableMemberInfo::PTYPE_CHAR:
-							_deserializeStdBasicString((std::basic_string<char>*)iter->ptr, jsonMember);
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_BOOL):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<bool>*)((*iterMem)->_memberInfo.ptr));
 							break;
-						case SerializableMemberInfo::PTYPE_WCHAR:
-							_deserializeStdBasicString((std::basic_string<wchar_t>*)iter->ptr, jsonMember);
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<int8_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<uint8_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<int16_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<uint16_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<int32_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<uint32_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<int64_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<uint64_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<char>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<wchar_t>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_FLOAT):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<float>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_DOUBLE):
+							writeStdVectorToPayload(jsonValue, jsonAllocator, (std::vector<double>*)((*iterMem)->_memberInfo.ptr));
+							break;
+						default:
+							throw Serializable::UnavailableTypeException();
+						}
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_STDLIST:
+						_serializeCheckNotEoo(&tempEtype, &iterEncap, endOfEncap);
+						writeElementToPayload(jsonValue, jsonAllocator, &tempEtype);
+						if (iterEncap == endOfEncap)
+						{
+							throw Serializable::UnavailableTypeException();
+						}
+						else {
+							switch (tempEtype)
+							{
+							case internal::SerializableMemberInfo::EncapType::ETYPE_SMARTPOINTER:
+								tempEtype = *(iterEncap++);
+								writeElementToPayload(jsonValue, jsonAllocator, &tempEtype);
+								switch (tempEtype)
+								{
+								case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
+									if (iterEncap != endOfEncap)
+										throw Serializable::UnavailableTypeException();
+									for (std::list<JsCPPUtils::SmartPointer<Serializable> >::const_iterator subiter = ((std::list<JsCPPUtils::SmartPointer<Serializable> >*)(*iterMem)->_memberInfo.ptr)->begin(); subiter != ((std::list<JsCPPUtils::SmartPointer<Serializable> >*)(*iterMem)->_memberInfo.ptr)->end(); subiter++)
+									{
+										writeElementToPayload(jsonValue, jsonAllocator, subiter->getPtr());
+									}
+									break;
+								default:
+									throw Serializable::UnavailableTypeException();
+								}
+								break;
+							case internal::SerializableMemberInfo::EncapType::ETYPE_STDVECTOR:
+								_serializeCheckEoo(&tempEtype, &iterEncap, endOfEncap);
+								writeElementToPayload(jsonValue, jsonAllocator, &tempEtype);
+								switch (tempEtype & 0x00FF)
+								{
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+									writeStdListToPayload(jsonValue, jsonAllocator, (std::list< std::vector<int8_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+									writeStdListToPayload(jsonValue, jsonAllocator, (std::list< std::vector<uint8_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+									writeStdListToPayload(jsonValue, jsonAllocator, (std::list< std::vector<int16_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+									writeStdListToPayload(jsonValue, jsonAllocator, (std::list< std::vector<uint16_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+									writeStdListToPayload(jsonValue, jsonAllocator, (std::list< std::vector<int32_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+									writeStdListToPayload(jsonValue, jsonAllocator, (std::list< std::vector<uint32_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+									writeStdListToPayload(jsonValue, jsonAllocator, (std::list< std::vector<int64_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+									writeStdListToPayload(jsonValue, jsonAllocator, (std::list< std::vector<uint64_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+									writeStdListToPayload(jsonValue, jsonAllocator, (std::list< std::vector<char> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+									writeStdListToPayload(jsonValue, jsonAllocator, (std::list< std::vector<wchar_t> >*)((*iterMem)->_memberInfo.ptr));
+									break;
+								default:
+									throw Serializable::UnavailableTypeException();
+								}
+								break;
+							case internal::SerializableMemberInfo::EncapType::ETYPE_STDBASICSTRING:
+								_serializeCheckEoo(&tempEtype, &iterEncap, endOfEncap);
+								writeElementToPayload(jsonValue, jsonAllocator, &tempEtype);
+								if (checkFlagsAll(tempEtype, internal::SerializableMemberInfo::EncapType::ETYPE_CHAR))
+									writeStdListToPayload(jsonValue, jsonAllocator, (std::list< std::basic_string<char> > *)(*iterMem)->_memberInfo.ptr);
+								else if (checkFlagsAll(tempEtype, internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR))
+									writeStdListToPayload(jsonValue, jsonAllocator, (std::list<std::basic_string<wchar_t> >*)(*iterMem)->_memberInfo.ptr);
+								else
+									throw Serializable::UnavailableTypeException();
+							default:
+								throw Serializable::UnavailableTypeException();
+							}
+						}
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
+						writeElementToPayload(jsonValue, jsonAllocator, (Serializable*)(*iterMem)->_memberInfo.ptr);
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_SMARTPOINTER:
+						tempEtype = *(iterEncap++);
+						switch (tempEtype)
+						{
+						case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
+							if (iterEncap != endOfEncap)
+								throw Serializable::UnavailableTypeException();
+							if (!((JsCPPUtils::SmartPointer<Serializable>*)(*iterMem)->_memberInfo.ptr)->getPtr() || (*iterMem)->isNull())
+							{
+								tempEtype |= internal::SerializableMemberInfo::EncapType::ETYPE_NULL;
+								writeElementToPayload(jsonValue, jsonAllocator, &tempEtype);
+							}
+							else {
+								writeElementToPayload(jsonValue, jsonAllocator, &tempEtype);
+								writeElementToPayload(jsonValue, jsonAllocator, ((JsCPPUtils::SmartPointer<Serializable>*)(*iterMem)->_memberInfo.ptr)->getPtr());
+							}
+
+							break;
+						default:
+							throw Serializable::UnavailableTypeException();
+						}
+						break;
+					case internal::SerializableMemberInfo::EncapType::ETYPE_NATIVEARRAY:
+						switch (tempEtype & 0x00FF)
+						{
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_BOOL):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const bool*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const int8_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const uint8_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const int16_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const uint16_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const int32_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const uint32_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const int64_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const uint64_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const char*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const wchar_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_FLOAT):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const float*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_DOUBLE):
+							writeElementArrayToPayload(jsonValue, jsonAllocator, (const double*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+						default:
+							throw Serializable::UnavailableTypeException();
+						}
+						break;
+					default:
+						throw Serializable::UnavailableTypeException();
+					}
+				}
+			}
+			jsonDoc.AddMember(jsonName, jsonValue, jsonAllocator);
+		}
+	}
+
+	void JSONObjectMapper::deserializeJsonObject(Serializable *serialiable, const rapidjson::Value &jsonObject) throw(Serializable::ParseException)
+	{
+		const std::list<internal::STypeCommon*> members = serialiable->serializableMembers();
+
+		for(std::list<internal::STypeCommon*>::const_iterator iterMem = members.begin(); iterMem != members.end(); iterMem++)
+		{
+			std::list<internal::SerializableMemberInfo::EncapType>::const_iterator iterEncap = (*iterMem)->_memberInfo.encaps.begin();
+			std::list<internal::SerializableMemberInfo::EncapType>::const_iterator endOfEncap = (*iterMem)->_memberInfo.encaps.end();
+			uint16_t tempEtypeReal;
+			const char *name = (*iterMem)->_memberInfo.name.c_str();
+			_serializeCheckNotEoo(&tempEtypeReal, &iterEncap, endOfEncap);
+			(*iterMem)->clear();
+			if (jsonObject.HasMember(name))
+			{
+				const rapidjson::Value &jsonValue = jsonObject[name];
+				if (jsonValue.IsNull()) {
+					(*iterMem)->setNull();
+				} else {
+					if ((tempEtypeReal & 0xFF00) == internal::SerializableMemberInfo::EncapType::ETYPE_NATIVE)
+					{
+						switch (tempEtypeReal & 0x00FF)
+						{
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_BOOL):
+							readElementFromPayload<bool>(jsonValue, (bool*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+							readElementFromPayload<int8_t>(jsonValue, (int8_t*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+							readElementFromPayload<uint8_t>(jsonValue, (uint8_t*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+							readElementFromPayload<int16_t>(jsonValue, (int16_t*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+							readElementFromPayload<uint16_t>(jsonValue, (uint16_t*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+							readElementFromPayload<int32_t>(jsonValue, (int32_t*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+							readElementFromPayload<uint32_t>(jsonValue, (uint32_t*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+							readElementFromPayload<int64_t>(jsonValue, (int64_t*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+							readElementFromPayload<uint64_t>(jsonValue, (uint64_t*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+							readElementFromPayload<char>(jsonValue, (char*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+							readElementFromPayload<wchar_t>(jsonValue, (wchar_t*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_FLOAT):
+							readElementFromPayload<float>(jsonValue, (float*)((*iterMem)->_memberInfo.ptr));
+							break;
+						case (internal::SerializableMemberInfo::EncapType::ETYPE_DOUBLE):
+							readElementFromPayload<double>(jsonValue, (double*)((*iterMem)->_memberInfo.ptr));
 							break;
 						default:
 							throw Serializable::UnavailableTypeException();
 						}
 					}
 					else {
-						_deserializeNativeArray(jsonMember, *iter);
+						switch (tempEtypeReal)
+						{
+						case internal::SerializableMemberInfo::EncapType::ETYPE_STDBASICSTRING:
+							_serializeCheckEoo(&tempEtypeReal, &iterEncap, endOfEncap);
+							if (iterEncap != endOfEncap)
+								throw Serializable::UnavailableTypeException();
+							if (checkFlagsAll(tempEtypeReal, internal::SerializableMemberInfo::EncapType::ETYPE_CHAR))
+								readElementFromPayload(jsonValue, (std::basic_string<char>*)(*iterMem)->_memberInfo.ptr);
+							else if (checkFlagsAll(tempEtypeReal, internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR))
+								readElementFromPayload(jsonValue, (std::basic_string<wchar_t>*)(*iterMem)->_memberInfo.ptr);
+							else
+								throw Serializable::UnavailableTypeException();
+							break;
+						case internal::SerializableMemberInfo::EncapType::ETYPE_STDVECTOR:
+							_serializeCheckNotEoo(&tempEtypeReal, &iterEncap, endOfEncap);
+							if (iterEncap != endOfEncap)
+								throw Serializable::UnavailableTypeException();
+							if (!(tempEtypeReal & internal::SerializableMemberInfo::EncapType::ETYPE_NULL))
+							{
+								switch (tempEtypeReal & 0x00FF)
+								{
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_BOOL):
+									readStdVectorFromPayload(jsonValue, (std::vector<bool>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+									readStdVectorFromPayload(jsonValue, (std::vector<int8_t>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+									readStdVectorFromPayload(jsonValue, (std::vector<uint8_t>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+									readStdVectorFromPayload(jsonValue, (std::vector<int16_t>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+									readStdVectorFromPayload(jsonValue, (std::vector<uint16_t>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+									readStdVectorFromPayload(jsonValue, (std::vector<int32_t>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+									readStdVectorFromPayload(jsonValue, (std::vector<uint32_t>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+									readStdVectorFromPayload(jsonValue, (std::vector<int64_t>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+									readStdVectorFromPayload(jsonValue, (std::vector<uint64_t>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+									readStdVectorFromPayload(jsonValue, (std::vector<char>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+									readStdVectorFromPayload(jsonValue, (std::vector<wchar_t>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_FLOAT):
+									readStdVectorFromPayload(jsonValue, (std::vector<float>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								case (internal::SerializableMemberInfo::EncapType::ETYPE_DOUBLE):
+									readStdVectorFromPayload(jsonValue, (std::vector<double>*)((*iterMem)->_memberInfo.ptr));
+									break;
+								default:
+									throw Serializable::UnavailableTypeException();
+								}
+							}
+							break;
+						case internal::SerializableMemberInfo::EncapType::ETYPE_STDLIST:
+							_serializeCheckNotEoo(&tempEtypeReal, &iterEncap, endOfEncap);
+							if (iterEncap == endOfEncap)
+							{
+								throw Serializable::UnavailableTypeException();
+							}
+							else {
+								switch (tempEtypeReal)
+								{
+								case internal::SerializableMemberInfo::EncapType::ETYPE_SMARTPOINTER:
+									tempEtypeReal = *(iterEncap++);
+									switch (tempEtypeReal)
+									{
+									case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
+										if (iterEncap != endOfEncap)
+											throw Serializable::UnavailableTypeException();
+										{
+											std::list<JsCPPUtils::SmartPointer<Serializable> > *plist = ((std::list<JsCPPUtils::SmartPointer<Serializable> >*)(*iterMem)->_memberInfo.ptr);
+											plist->clear();
+											for(rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
+											{
+												JsCPPUtils::SmartPointer<Serializable> obj = (*iterMem)->_memberInfo.createFactory->create();
+												readElementFromPayload(*iter, obj.getPtr());
+												plist->push_back(obj);
+											}
+										}
+										break;
+									default:
+										throw Serializable::UnavailableTypeException();
+									}
+									break;
+								case internal::SerializableMemberInfo::EncapType::ETYPE_STDVECTOR:
+									_serializeCheckEoo(&tempEtypeReal, &iterEncap, endOfEncap);
+									switch (tempEtypeReal & 0x00FF)
+									{
+									case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+										readStdListFromPayload(jsonValue, (std::list< std::vector<int8_t> >*)((*iterMem)->_memberInfo.ptr));
+										break;
+									case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+										readStdListFromPayload(jsonValue, (std::list< std::vector<uint8_t> >*)((*iterMem)->_memberInfo.ptr));
+										break;
+									case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+										readStdListFromPayload(jsonValue, (std::list< std::vector<int16_t> >*)((*iterMem)->_memberInfo.ptr));
+										break;
+									case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+										readStdListFromPayload(jsonValue, (std::list< std::vector<uint16_t> >*)((*iterMem)->_memberInfo.ptr));
+										break;
+									case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+										readStdListFromPayload(jsonValue, (std::list< std::vector<int32_t> >*)((*iterMem)->_memberInfo.ptr));
+										break;
+									case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+										readStdListFromPayload(jsonValue, (std::list< std::vector<uint32_t> >*)((*iterMem)->_memberInfo.ptr));
+										break;
+									case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+										readStdListFromPayload(jsonValue, (std::list< std::vector<int64_t> >*)((*iterMem)->_memberInfo.ptr));
+										break;
+									case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+										readStdListFromPayload(jsonValue, (std::list< std::vector<uint64_t> >*)((*iterMem)->_memberInfo.ptr));
+										break;
+									case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+										readStdListFromPayload(jsonValue, (std::list< std::vector<char> >*)((*iterMem)->_memberInfo.ptr));
+										break;
+									case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+										readStdListFromPayload(jsonValue, (std::list< std::vector<wchar_t> >*)((*iterMem)->_memberInfo.ptr));
+										break;
+									default:
+										throw Serializable::UnavailableTypeException();
+									}
+									break;
+								case internal::SerializableMemberInfo::EncapType::ETYPE_STDBASICSTRING:
+									_serializeCheckEoo(&tempEtypeReal, &iterEncap, endOfEncap);
+									if (checkFlagsAll(tempEtypeReal, internal::SerializableMemberInfo::EncapType::ETYPE_CHAR))
+										readStdListFromPayload(jsonValue, (std::list< std::basic_string<char> > *)(*iterMem)->_memberInfo.ptr);
+									else if (checkFlagsAll(tempEtypeReal, internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR))
+										readStdListFromPayload(jsonValue, (std::list<std::basic_string<wchar_t> >*)(*iterMem)->_memberInfo.ptr);
+									else
+										throw Serializable::UnavailableTypeException();
+								default:
+									throw Serializable::UnavailableTypeException();
+								}
+							}
+							break;
+						case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
+							readElementFromPayload(jsonValue, (Serializable*)(*iterMem)->_memberInfo.ptr);
+							break;
+						case internal::SerializableMemberInfo::EncapType::ETYPE_SMARTPOINTER:
+							tempEtypeReal = *(iterEncap++);
+							if (tempEtypeReal & internal::SerializableMemberInfo::EncapType::ETYPE_NULL)
+							{
+								(*iterMem)->setNull();
+							}
+							else {
+								switch (tempEtypeReal & 0xFF00)
+								{
+								case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
+									if (!(tempEtypeReal & internal::SerializableMemberInfo::EncapType::ETYPE_NULL))
+									{
+										JsCPPUtils::SmartPointer<Serializable> obj = (*iterMem)->_memberInfo.createFactory->create();
+										readElementFromPayload(jsonValue, (Serializable*)obj.getPtr());
+									}
+								default:
+									throw Serializable::UnavailableTypeException();
+								}
+							}
+							break;
+						case internal::SerializableMemberInfo::EncapType::ETYPE_NATIVEARRAY:
+							switch (tempEtypeReal & 0x00FF)
+							{
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_BOOL):
+								readElementArrayFromPayload(jsonValue, (int8_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 1):
+								readElementArrayFromPayload(jsonValue, (int8_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 1):
+								readElementArrayFromPayload(jsonValue, (uint8_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 2):
+								readElementArrayFromPayload(jsonValue, (int16_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 2):
+								readElementArrayFromPayload(jsonValue, (uint16_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 4):
+								readElementArrayFromPayload(jsonValue, (int32_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 4):
+								readElementArrayFromPayload(jsonValue, (uint32_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_SINT | 8):
+								readElementArrayFromPayload(jsonValue, (int64_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_UINT | 8):
+								readElementArrayFromPayload(jsonValue, (uint64_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_CHAR):
+								readElementArrayFromPayload(jsonValue, (char*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_WCHAR):
+								readElementArrayFromPayload(jsonValue, (wchar_t*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_FLOAT):
+								readElementArrayFromPayload(jsonValue, (float*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+								break;
+							case (internal::SerializableMemberInfo::EncapType::ETYPE_DOUBLE):
+								readElementArrayFromPayload(jsonValue, (double*)((*iterMem)->_memberInfo.ptr), (*iterMem)->_memberInfo.length);
+							default:
+								throw Serializable::UnavailableTypeException();
+							}
+							break;
+						case internal::SerializableMemberInfo::EncapType::ETYPE_NULL:
+							(*iterMem)->setNull();
+							break;
+						default:
+							throw Serializable::UnavailableTypeException();
+						}
 					}
-				}
-				else if (iter->ptype & SerializableMemberInfo::PTYPE_SUBPAYLOAD)
-				{
-					if (iter->mtype & SerializableMemberInfo::MTYPE_JSCPPUTILSMARTPOINTER)
-					{
-						JsCPPUtils::SmartPointer<Serializable> *pspobj = (JsCPPUtils::SmartPointer<Serializable> *)iter->ptr;
-						if (jsonMember.IsNull())
-							*pspobj = NULL;
-						else
-							JSONObjectMapper::deserializeJsonObject(pspobj->getPtr(), jsonMember);
-					} else {
-						Serializable *pobj = (Serializable *)iter->ptr;
-						if (jsonMember.IsNull())
-							Serializable::clearObject(pobj);
-						else
-							JSONObjectMapper::deserializeJsonObject(pobj, jsonMember);
-					}
-				}
-				else
-				{
-					// Just object
-					_deserializeNativeObject(jsonMember, *iter);
 				}
 			}
+			else {
+				(*iterMem)->setNull();
+			}
+			iterMem++;
 		}
 	}
-#endif
 }
+
+#endif
