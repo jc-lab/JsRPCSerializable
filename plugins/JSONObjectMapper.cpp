@@ -39,6 +39,8 @@ namespace JsRPC {
 	static T readFromPayload(const rapidjson::Value &jsonValue);
 	template<>
 	static bool readFromPayload<bool>(const rapidjson::Value &jsonValue) {
+		if (!jsonValue.IsBool())
+			throw JSONObjectMapper::TypeNotMatchException();
 		return jsonValue.GetBool();
 	}
 	template<>
@@ -59,42 +61,62 @@ namespace JsRPC {
 	}
 	template<>
 	static int8_t readFromPayload<int8_t>(const rapidjson::Value &jsonValue) {
+		if (!jsonValue.IsInt())
+			throw JSONObjectMapper::TypeNotMatchException();
 		return jsonValue.GetInt();
 	}
 	template<>
 	static uint8_t readFromPayload<uint8_t>(const rapidjson::Value &jsonValue) {
+		if (!jsonValue.IsUint())
+			throw JSONObjectMapper::TypeNotMatchException();
 		return jsonValue.GetUint();
 	}
 	template<>
 	static int16_t readFromPayload<int16_t>(const rapidjson::Value &jsonValue) {
+		if (!jsonValue.IsInt())
+			throw JSONObjectMapper::TypeNotMatchException();
 		return jsonValue.GetInt();
 	}
 	template<>
 	static uint16_t readFromPayload<uint16_t>(const rapidjson::Value &jsonValue) {
+		if (!jsonValue.IsUint())
+			throw JSONObjectMapper::TypeNotMatchException();
 		return jsonValue.GetUint();
 	}
 	template<>
 	static int32_t readFromPayload<int32_t>(const rapidjson::Value &jsonValue) {
+		if (!jsonValue.IsInt())
+			throw JSONObjectMapper::TypeNotMatchException();
 		return jsonValue.GetInt();
 	}
 	template<>
 	static uint32_t readFromPayload<uint32_t>(const rapidjson::Value &jsonValue) {
+		if (!jsonValue.IsUint())
+			throw JSONObjectMapper::TypeNotMatchException();
 		return jsonValue.GetUint();
 	}
 	template<>
 	static int64_t readFromPayload<int64_t>(const rapidjson::Value &jsonValue) {
+		if (!jsonValue.IsInt64())
+			throw JSONObjectMapper::TypeNotMatchException();
 		return jsonValue.GetInt64();
 	}
 	template<>
 	static uint64_t readFromPayload<uint64_t>(const rapidjson::Value &jsonValue) {
+		if (!jsonValue.IsUint64())
+			throw JSONObjectMapper::TypeNotMatchException();
 		return jsonValue.GetUint64();
 	}
 	template<>
 	static float readFromPayload<float>(const rapidjson::Value &jsonValue) {
+		if (!jsonValue.IsFloat())
+			throw JSONObjectMapper::TypeNotMatchException();
 		return jsonValue.GetFloat();
 	}
 	template<>
 	static double readFromPayload<double>(const rapidjson::Value &jsonValue) {
+		if (!jsonValue.IsDouble())
+			throw JSONObjectMapper::TypeNotMatchException();
 		return jsonValue.GetDouble();
 	}
 
@@ -191,9 +213,9 @@ namespace JsRPC {
 	{
 		size_t i = 0;
 		if (!jsonValue.IsArray())
-			throw Serializable::Serializable::ParseException();
+			throw JSONObjectMapper::TypeNotMatchException();
 		if (jsonValue.Size() != length)
-			throw Serializable::Serializable::ParseException();
+			throw JSONObjectMapper::TypeNotMatchException();
 		for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
 		{
 			readElementFromPayload(*iter, &data[i++]);
@@ -214,13 +236,13 @@ namespace JsRPC {
 	static void readElementFromPayload(const rapidjson::Value &jsonValue, std::basic_string<char> *data)
 	{
 		if(!jsonValue.IsString())
-			throw Serializable::Serializable::ParseException();
+			throw JSONObjectMapper::TypeNotMatchException();
 		*data = std::basic_string<char>(jsonValue.GetString(), jsonValue.GetStringLength());
 	}
 	static void readElementFromPayload(const rapidjson::Value &jsonValue, std::basic_string<wchar_t> *data)
 	{
 		if (!jsonValue.IsString())
-			throw Serializable::Serializable::ParseException();
+			throw JSONObjectMapper::TypeNotMatchException();
 #if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
 		*data = JsCPPUtils::StringEncoding::UTF8ToStringW(jsonValue.GetString(), jsonValue.GetStringLength());
 #endif
@@ -239,7 +261,7 @@ namespace JsRPC {
 	template <typename T>
 	static void readStdVectorFromPayload(const rapidjson::Value &jsonValue, std::vector<T> *data) {
 		if(!jsonValue.IsArray())
-			throw Serializable::Serializable::ParseException();
+			throw JSONObjectMapper::TypeNotMatchException();
 		data->clear();
 		for (rapidjson::Value::ConstValueIterator iter = jsonValue.Begin(); iter != jsonValue.End(); iter++)
 		{
@@ -625,7 +647,7 @@ namespace JsRPC {
 		}
 	}
 
-	void JSONObjectMapper::deserializeJsonObject(Serializable *serialiable, const rapidjson::Value &jsonObject) throw(Serializable::ParseException)
+	void JSONObjectMapper::deserializeJsonObject(Serializable *serialiable, const rapidjson::Value &jsonObject) throw(JSONObjectMapper::TypeNotMatchException)
 	{
 		const std::list<internal::STypeCommon*> members = serialiable->serializableMembers();
 
