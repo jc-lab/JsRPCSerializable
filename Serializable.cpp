@@ -535,6 +535,7 @@ namespace JsRPC {
 									writeStdListToPayload(payload, (std::list<std::basic_string<wchar_t> >*)(*iterMem)->_memberInfo.ptr);
 								else
 									throw UnavailableTypeException();
+								break;
 							default:
 								throw UnavailableTypeException();
 							}
