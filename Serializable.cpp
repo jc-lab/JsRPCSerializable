@@ -238,7 +238,7 @@ namespace JsRPC {
 		writeElementToPayload(payload, &size);
 		for (std::list< std::basic_string< T > >::const_iterator iter = data->begin(); iter != data->end(); iter++)
 		{
-			writePtrToPayload(payload, &size, sizeof(size));
+			writeElementToPayload(payload, &(*iter));
 		}
 	}
 	template <typename T>
@@ -248,7 +248,7 @@ namespace JsRPC {
 		writeElementToPayload(payload, &size);
 		for (std::list< std::vector< T > >::const_iterator iter = data->begin(); iter != data->end(); iter++)
 		{
-			writePtrToPayload(payload, &size, sizeof(size));
+			writeStdVectorToPayload(payload, &(*iter));
 		}
 	}
 
@@ -871,6 +871,7 @@ namespace JsRPC {
 									readStdListFromPayload(payload, &pos, (std::list<std::basic_string<wchar_t> >*)(*iterMem)->_memberInfo.ptr);
 								else
 									throw UnavailableTypeException();
+								break;
 							default:
 								throw UnavailableTypeException();
 							}
