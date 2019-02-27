@@ -136,7 +136,7 @@ namespace JsRPC {
 			this->_memberInfo.isNull = false;
 			this->_value = value;
 		}
-		const T get() const {
+		const T& get() const {
 			return this->_value;
 		}
 
@@ -146,6 +146,13 @@ namespace JsRPC {
 		}
 		const T& operator*() const {
 			return this->_value;
+		}
+
+		STypeBase<T> &operator=(const STypeBase<T>& obj) {
+			this->setNull(obj.isNull());
+			if (!obj.isNull())
+				this->_value = obj.get();
+			return *this;
 		}
 	};
 	template <typename T>
@@ -178,6 +185,13 @@ namespace JsRPC {
 		const T& operator*() const {
 			return this->_value;
 		}
+
+		SRefTypeBase<T> &operator=(const SRefTypeBase<T>& obj) {
+			this->setNull(obj.isNull());
+			if (!obj.isNull())
+				this->_value = obj.get();
+			return *this;
+		}
 	};
 	template <typename T, int arraySize>
 	class SArrayTypeBase : public internal::STypeCommon
@@ -206,6 +220,14 @@ namespace JsRPC {
 		}
 		const T get() const {
 			return this->_value;
+		}
+
+		SArrayTypeBase<T, arraySize> &operator=(const SArrayTypeBase<T, arraySize>& obj) {
+			this->setNull(obj.isNull());
+			if (!obj.isNull()) {
+				memcpy(this->_value, obj.get(), sizeof(this->_value));
+			}
+			return *this;
 		}
 	};
 	template <typename T, int arraySize>
@@ -237,6 +259,14 @@ namespace JsRPC {
 		const T get() const {
 			return this->_value;
 		}
+
+		SArrayTypeRefBase<T, arraySize> &operator=(const SArrayTypeRefBase<T, arraySize>& obj) {
+			this->setNull(obj.isNull());
+			if (!obj.isNull()) {
+				memcpy(this->_value, obj.get(), sizeof(this->_value));
+			}
+			return *this;
+		}
 	};
 
 	template<typename T>
@@ -258,6 +288,9 @@ namespace JsRPC {
 	private:
 		SArrayType() {}
 	};
+
+	template <typename T>
+	class SSerializableRefType;
 
 	template <typename T>
 	class SSerializableType : public internal::STypeCommon
@@ -293,7 +326,7 @@ namespace JsRPC {
 			this->_memberInfo.isNull = false;
 			this->_value = value;
 		}
-		const T get() const {
+		const T &get() const {
 			return this->_value;
 		}
 		void setNull() {
@@ -304,6 +337,25 @@ namespace JsRPC {
 		}
 		const bool isNull() const {
 			return this->_memberInfo.isNull;
+		}
+
+		SSerializableType<T> &operator=(const SSerializableType<T>& obj) {
+			this->setNull(obj.isNull());
+			if (!obj.isNull()) {
+				std::vector<uint8_t> payload;
+				obj._test->serialize(payload);
+				this->_test->deserialize(payload);
+			}
+			return *this;
+		}
+		SSerializableType<T> &operator=(const SSerializableRefType<T>& obj) {
+			this->setNull(obj.isNull());
+			if (!obj.isNull()) {
+				std::vector<uint8_t> payload;
+				obj._test->serialize(payload);
+				this->_test->deserialize(payload);
+			}
+			return *this;
 		}
 	};
 	template <typename T>
@@ -353,9 +405,32 @@ namespace JsRPC {
 		const bool isNull() const {
 			return this->_memberInfo.isNull;
 		}
+
+		SSerializableRefType<T> &operator=(const SSerializableType<T>& obj) {
+			this->setNull(obj.isNull());
+			if (!obj.isNull()) {
+				std::vector<uint8_t> payload;
+				obj._test->serialize(payload);
+				this->_test->deserialize(payload);
+			}
+			return *this;
+		}
+		SSerializableRefType<T> &operator=(const SSerializableRefType<T>& obj) {
+			this->setNull(obj.isNull());
+			if (!obj.isNull()) {
+				std::vector<uint8_t> payload;
+				obj._test->serialize(payload);
+				this->_test->deserialize(payload);
+			}
+			return *this;
+		}
 	};
 
 #if defined(HAS_JSCPPUTILS) && HAS_JSCPPUTILS
+
+	template <typename T>
+	class SSerializableRefType< JsCPPUtils::SmartPointer<T> >;
+
 	template <typename T>
 	class SSerializableType< JsCPPUtils::SmartPointer<T> > : public internal::STypeCommon
 	{
@@ -386,7 +461,7 @@ namespace JsRPC {
 			this->_memberInfo.isNull = false;
 			this->_value = value;
 		}
-		const T get() const {
+		const T &get() const {
 			return this->_value;
 		}
 		void setNull() {
@@ -394,6 +469,20 @@ namespace JsRPC {
 		}
 		const bool isNull() {
 			return this->_memberInfo.isNull;
+		}
+		SSerializableType< JsCPPUtils::SmartPointer<T> > &operator=(const SSerializableType< JsCPPUtils::SmartPointer<T> >& obj) {
+			this->setNull(obj.isNull());
+			if (!obj.isNull()) {
+				this->set(obj.get());
+			}
+			return *this;
+		}
+		SSerializableType< JsCPPUtils::SmartPointer<T> > &operator=(const SSerializableRefType< JsCPPUtils::SmartPointer<T> >& obj) {
+			this->setNull(obj.isNull());
+			if (!obj.isNull()) {
+				this->set(obj.get());
+			}
+			return *this;
 		}
 	};
 	template <typename T>
@@ -435,6 +524,20 @@ namespace JsRPC {
 		}
 		const bool isNull() const {
 			return this->_memberInfo.isNull;
+		}
+		SSerializableRefType< JsCPPUtils::SmartPointer<T> > &operator=(const SSerializableType< JsCPPUtils::SmartPointer<T> >& obj) {
+			this->setNull(obj.isNull());
+			if (!obj.isNull()) {
+				this->set(obj.get());
+			}
+			return *this;
+		}
+		SSerializableRefType< JsCPPUtils::SmartPointer<T> > &operator=(const SSerializableRefType< JsCPPUtils::SmartPointer<T> >& obj) {
+			this->setNull(obj.isNull());
+			if (!obj.isNull()) {
+				this->set(obj.get());
+			}
+			return *this;
 		}
 	};
 #endif
@@ -761,9 +864,32 @@ namespace JsRPC {
 		int64_t m_serialVersionUID;
 		std::list<internal::STypeCommon*> m_members;
 
+	protected:
+#if (__cplusplus >= 201103) || (__cplusplus == 199711) || (defined(HAS_MOVE_SEMANTICS) && HAS_MOVE_SEMANTICS == 1)
+		explicit Serializable(Serializable&& _ref)
+		{
+			assert(false);
+		}
+#endif
+
+	private:
+		Serializable(const Serializable &obj) {
+			assert(false);
+		}
+
 	public:
 		Serializable(const char *name, int64_t serialVersionUID);
 		virtual ~Serializable();
+
+		Serializable& operator=(const Serializable& obj) {
+			assert(this->m_name == obj.m_name);
+			assert(this->m_serialVersionUID == obj.m_serialVersionUID);
+			std::vector<uint8_t> payload;
+			obj.serialize(payload);
+			this->deserialize(payload);
+			return *this;
+		}
+
 		const std::list<internal::STypeCommon*> &serializableMembers() const { return m_members; }
 
 		void serialize(std::vector<unsigned char>& payload) const throw(UnavailableTypeException);
