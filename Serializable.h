@@ -897,6 +897,13 @@ namespace JsRPC {
 
 		void serializableClearObjects();
 
+		std::string serializableGetName() {
+			return m_name;
+		}
+		int64_t serializableGetSerialVersionUID() {
+			return m_serialVersionUID;
+		}
+
 	protected:
 		internal::STypeCommon &serializableMapMember(const char *name, internal::STypeCommon &object);
 
