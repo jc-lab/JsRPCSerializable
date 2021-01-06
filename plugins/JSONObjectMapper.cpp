@@ -506,9 +506,12 @@ namespace JsRPC {
 								case internal::SerializableMemberInfo::EncapType::ETYPE_SUBPAYLOAD:
 									if (iterEncap != endOfEncap)
 										throw Serializable::UnavailableTypeException();
+									jsonValue.SetArray();
 									for (std::list<JsCPPUtils::SmartPointer<Serializable> >::const_iterator subiter = ((std::list<JsCPPUtils::SmartPointer<Serializable> >*)(*iterMem)->_memberInfo.ptr)->begin(); subiter != ((std::list<JsCPPUtils::SmartPointer<Serializable> >*)(*iterMem)->_memberInfo.ptr)->end(); subiter++)
 									{
-										writeElementToPayload(jsonValue, jsonAllocator, subiter->getPtr());
+										rapidjson::Value jsonObj;
+										writeElementToPayload(jsonObj, jsonAllocator, subiter->getPtr());
+										jsonValue.PushBack(jsonObj, jsonAllocator);
 									}
 									break;
 								default:
